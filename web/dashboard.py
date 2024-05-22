@@ -42,8 +42,10 @@ def update_mode_table(control):
 def catAdjust():
     cat_adjust_data = None
     cat_control_data = None
+    pig_adjust_data = None
+    pig_control_data = None
     if request.method == 'POST':
-        #  form data
+        # Form data
         fanTemp = request.form['fanTemp']
         dustWindow = request.form['dustWindow']
         petLight = request.form['petLight']
@@ -68,17 +70,22 @@ def catAdjust():
             mydb.commit()
 
             cursor = mydb.cursor(dictionary=True)
-            cursor.execute(
-                "SELECT * FROM Cat_Adjust_Table WHERE catAdjustTableID = 1 LIMIT 1;")
+            cursor.execute("SELECT * FROM Cat_Adjust_Table WHERE catAdjustTableID = 1 LIMIT 1;")
             cat_adjust_data = cursor.fetchone()
 
-            cursor.execute(
-                "SELECT * FROM Cat_Control_Table WHERE catControlID = 1 LIMIT 1;")
+            cursor.execute("SELECT * FROM Cat_Control_Table WHERE catControlID = 1 LIMIT 1;")
             cat_control_data = cursor.fetchone()
 
-        # Redirect to a success page or render a success message
-        return render_template('index.html', cat_adjust_data=cat_adjust_data, cat_control_data=cat_control_data)
+            # Fetch pig_adjust_data and pig_control_data to ensure they're defined
+            cursor.execute("SELECT * FROM Pig_Adjust_Table WHERE pigAdjustTableID = 1 LIMIT 1;")
+            pig_adjust_data = cursor.fetchone()
 
+            cursor.execute("SELECT * FROM Pig_Control_Table WHERE pigControlID = 1 LIMIT 1;")
+            pig_control_data = cursor.fetchone()
+
+        # Redirect to a success page or render a success message
+        return render_template('index.html', cat_adjust_data=cat_adjust_data, cat_control_data=cat_control_data, pig_adjust_data=pig_adjust_data, pig_control_data=pig_control_data)
+    
 #  pig Adjust
 @app.route('/pigAdjust', methods=['POST'])
 def pigAdjust():
