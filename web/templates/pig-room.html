@@ -2,96 +2,88 @@
 <html>
     <head>
         <title>Pig Room</title>
-        <link rel="stylesheet" type="text/css" href="style.css" />
+		<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}" />
     </head>
     <body>
         <div class="container2">
             <img
-                src="images/pig2.png"
-                alt="Pig Room"
-                class="title-background"
-            />
+                src="../static/images/pig2.png" alt="Pig Room" class="title-background" />
             <h1 class="title">Pig Room</h1>
             <div class="button-container">
                 <button id="openModalBtn" class="btn">Live Streaming</button>
             </div>
             <div id="chartModal" class="modal">
-                <div class="modal-content">
-                    <span class="close">&times;</span>
-                    <img
-                        src="{{ url_for('static', filename='Backyard/tempChart/temperature_chart.png') }}"
-                        alt="Chart Image"
-                    />
-                </div>
-            </div>
+				<div class="modal-content">
+					<span class="close">&times;</span>
+					<iframe id="liveStream" src="" frameborder="0" allowfullscreen></iframe>				
+				</div>
+			</div>
 
             {% for row in data %}
             <div class="data-container">
                 <div class="data-row">
-                    <div class="data-label">Date:</div>
-                    <div class="data-value">{{ row["date"] }}</div>
-                </div>
-                <div class="data-row">
-                    <div class="data-label">Time:</div>
-                    <div class="data-value">{{ row["time"] }}</div>
-                </div>
+					<div class="data-label">Date:</div>
+					<div class="data-value">{{ row["time"].strftime('%Y-%m-%d') }}</div>
+				</div>
+				<div class="data-row">
+					<div class="data-label">Time:</div>
+					<div class="data-value">{{ row["time"].strftime('%H:%M:%S') }}</div>
+				</div>
                 <div class="data-row">
                     <div class="data-label">Humidity:</div>
                     <div class="data-value">{{ row["humidity"] }}</div>
                 </div>
                 <div class="data-row">
                     <div class="data-label">Temperature:</div>
-                    <div class="data-value">
-                        {{ row["temperature_C"] }}Â°C / {{ row["temperature_F"]
-                        }}Â°F
-                    </div>
+                    <div class="data-value"> {{ row["temperature_C"] }}°C / {{ row["temperature_F"] }}°F </div>
                 </div>
                 <div class="data-row">
                     <div class="data-label">Light:</div>
-                    <div class="data-value">{{ row["light"] }}</div>
+                    <div class="data-value">{% if row["lightState"] == 0 %} OFF {% else %} ON {% endif %}</div>
                 </div>
                 <div class="data-row">
-                    <div class="data-label">Fan:</div>
-                    <div class="data-value">{{ row["fan"] }}</div>
-                    <div class="data-label data-label-fan-speed">
-                        Fan Speed:
-                    </div>
-                    <div class="data-value">{{ row["fanSpeed"] }}</div>
-                </div>
+					<div class="data-label">Fan:</div>
+					<div class="data-value">{% if row["fanState"] == 0 %} OFF {% else %} ON {% endif %}</div>
+					<div class="data-label data-label-fan-speed">Fan Speed:</div>
+					<div class="data-value">{{ row["fanSpeed"] }}</div>
+				</div>
                 <div class="data-row">
-                    <div class="data-label">Window:</div>
-                    <div class="data-value">{{ row["Window"] }}</div>
-                </div>
+					<div class="data-label">Window:</div>
+					<div class="data-value">{% if row["windowState"] == 0 %} OFF {% else %} ON {% endif %}</div>
+				</div>
                 <div class="data-row">
-                    <div class="data-label">Dust Level:</div>
-                    <img
-                        src="{{ url_for('static', filename=row['roomName'] + '/chart/chart' + row['roomID']|string + '.png') }}"
-                        alt="Chart Image"
-                    />
-                </div>
+					<div class="data-label">Dust Level:</div>
+					<img src="{{ url_for('static', filename='pigRoom/chart/chart_' + row['pigTableID']|string + '.png') }}" alt="Chart Image" />
+				</div>
             </div>
             {% endfor %}
         </div>
 
         <script>
-            // JavaScript to handle modal functionality
-            var modal = document.getElementById("chartModal");
-            var btn = document.getElementById("openModalBtn");
-            var span = document.getElementsByClassName("close")[0];
+			// JavaScript to handle modal functionality
+			var modal = document.getElementById("chartModal");
+			var btn = document.getElementById("openModalBtn");
+			var span = document.getElementsByClassName("close")[0];
 
-            btn.onclick = function () {
-                modal.style.display = "block";
-            };
+			btn.onclick = function () {
+				var iframe = document.getElementById("liveStream");
+				iframe.src = "/video_feed"; 
+				modal.style.display = "block";
+			};
 
-            span.onclick = function () {
-                modal.style.display = "none";
-            };
+			span.onclick = function () {
+				modal.style.display = "none";
+				var iframe = document.getElementById("liveStream");
+				iframe.src = ""; 
+			};
 
-            window.onclick = function (event) {
-                if (event.target == modal) {
-                    modal.style.display = "none";
-                }
-            };
-        </script>
+			window.onclick = function (event) {
+				if (event.target == modal) {
+					modal.style.display = "none";
+					var iframe = document.getElementById("liveStream");
+					iframe.src = ""; 
+				}
+			};
+		</script>
     </body>
 </html>

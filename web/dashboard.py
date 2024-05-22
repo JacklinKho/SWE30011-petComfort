@@ -79,6 +79,48 @@ def catAdjust():
         # Redirect to a success page or render a success message
         return render_template('index.html', cat_adjust_data=cat_adjust_data, cat_control_data=cat_control_data)
 
+#  pig Adjust
+@app.route('/pigAdjust', methods=['POST'])
+def pigAdjust():
+    pig_adjust_data = None
+    pig_control_data = None
+    if request.method == 'POST':
+        #  form data
+        fanTemp = request.form['fanTemp']
+        dustWindow = request.form['dustWindow']
+        petLight = request.form['petLight']
+        irDistance = request.form['irDistance']
+
+        # Connect to MySQL and execute INSERT or UPDATE query
+        with mydb.cursor() as cursor:
+            # Check if a record already exists in the table
+            cursor.execute("SELECT * FROM Pig_Adjust_Table")
+            existing_record = cursor.fetchone()
+
+            if existing_record:
+                # Update existing record
+                sql = "UPDATE Pig_Adjust_Table SET fanTemp=%s, dustWindow=%s, petLight=%s, irDistance=%s"
+                val = (fanTemp, dustWindow, petLight, irDistance)
+            else:
+                # Insert new record
+                sql = "INSERT INTO Pig_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (%s, %s, %s, %s)"
+                val = (fanTemp, dustWindow, petLight, irDistance)
+
+            cursor.execute(sql, val)
+            mydb.commit()
+
+            cursor = mydb.cursor(dictionary=True)
+            cursor.execute(
+                "SELECT * FROM Pig_Adjust_Table WHERE pigAdjustTableID = 1 LIMIT 1;")
+            pig_adjust_data = cursor.fetchone()
+
+            cursor.execute(
+                "SELECT * FROM Pig_Control_Table WHERE pigControlID = 1 LIMIT 1;")
+            pig_control_data = cursor.fetchone()
+
+        # Redirect to a success page or render a success message
+        return render_template('index.html', pig_adjust_data=pig_adjust_data, pig_control_data=pig_control_data)
+
 
 # Route to handle toggle button change
 @app.route('/toggle-mode', methods=['POST'])
@@ -126,6 +168,35 @@ def catControl():
 
     return "Data stored successfully"
 
+# pig Control
+@app.route('/pigControl', methods=['POST'])
+def pigControl():
+    lightState = request.form.get('light') == 'true'
+    fanState = request.form.get('fan') == 'true'
+    windowState = request.form.get('window') == 'true'
+
+    with mydb.cursor() as cursor:
+        # Check if a record already exists in the table
+        cursor.execute("SELECT * FROM Pig_Control_Table LIMIT 1")
+        existing_record = cursor.fetchone()
+
+        if existing_record:
+            # Construct the SQL query to update only the changed fields
+            cursor.execute(
+                f"UPDATE Pig_Control_Table SET lightState = {lightState} WHERE pigControlID = 1")
+            cursor.execute(
+                f"UPDATE Pig_Control_Table SET fanState = {fanState} WHERE pigControlID = 1")
+            cursor.execute(
+                f"UPDATE Pig_Control_Table SET windowState = {windowState} WHERE pigControlID = 1")
+        else:
+            # Insert new record if no existing record found
+            sql = "INSERT INTO Pig_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (lightState, fanState, windowState))
+
+        mydb.commit()
+
+    return "Data stored successfully"
+
 
 # Define route for index page
 @app.route('/')
@@ -139,6 +210,14 @@ def index():
         "SELECT * FROM Cat_Control_Table WHERE catControlID = 1 LIMIT 1;")
     cat_control_data = cursor.fetchone()
 
+    cursor.execute(
+        "SELECT * FROM Pig_Adjust_Table WHERE pigAdjustTableID = 1 LIMIT 1")
+    pig_adjust_data = cursor.fetchone()
+
+    cursor.execute(
+        "SELECT * FROM Pig_Control_Table WHERE pigControlID = 1 LIMIT 1;")
+    pig_control_data = cursor.fetchone()
+
     cursor.execute("SELECT * FROM Mode_Table LIMIT 1")
     existing_mode = cursor.fetchone()
     if not existing_mode:
@@ -148,7 +227,7 @@ def index():
     cursor.close()
 
     # Call function to continuously insert sensor data
-    return render_template('index.html', cat_adjust_data=cat_adjust_data, cat_control_data=cat_control_data)
+    return render_template('index.html', cat_adjust_data=cat_adjust_data, cat_control_data=cat_control_data, pig_adjust_data=pig_adjust_data, pig_control_data=pig_control_data)
 
 # Define route to render catRoom page
 
@@ -218,6 +297,69 @@ def catRoom():
         print("Error:", e)
 
     return render_template('cat-room.html', data=cats_list)
+
+# Define route to render pigRoom page
+@app.route('/pig-room')
+def pigRoom():
+    cursor = mydb.cursor(dictionary=True)
+    cursor.execute("""
+        SELECT Pig_Table.*, Pig_Dust_Table.dustLevel 
+        FROM Pig_Table 
+        LEFT JOIN Pig_Dust_Table ON Pig_Table.pigTableID = Pig_Dust_Table.pigTableId 
+        WHERE Pig_Table.petCount > 0
+        ORDER BY Pig_Table.pigTableID DESC
+    """)
+    rows = cursor.fetchall()
+    pigs = {}
+
+    for row in rows:
+        if row['pigTableID'] not in pigs:
+            pigs[row['pigTableID']] = row
+            pigs[row['pigTableID']]['dust_levels'] = []
+
+        if row['dustLevel'] is not None:
+            pigs[row['pigTableID']]['dust_levels'].append(row['dustLevel'])
+
+    cursor.close()
+
+    pigs_list = list(pigs.values())
+    # print(pigs_list)
+
+    try:
+        for pig in pigs_list:
+            dust_levels_list = pig['dust_levels']
+            # print(dust_levels_list)
+            if dust_levels_list.__len__() > 0:
+                plt.plot(np.arange(1, len(dust_levels_list) + 1),
+                         dust_levels_list)
+                plt.xlabel('Reading')
+                plt.ylabel('Dust Levels')
+                plt.title('Dust Level Readings')
+                plt.grid(True)
+
+                # Highlight min, max, and average values
+                min_value = min(dust_levels_list)
+                max_value = max(dust_levels_list)
+                avg_value = sum(dust_levels_list) / len(dust_levels_list)
+
+                plt.scatter(dust_levels_list.index(min_value) + 1, min_value, color='r', label='Min')
+                plt.scatter(dust_levels_list.index(max_value) + 1, max_value, color='g', label='Max')
+
+                plt.text(dust_levels_list.index(min_value) + 1, min_value,
+                            f'Min: {min_value}', verticalalignment='bottom', horizontalalignment='right', color='r')
+                plt.text(dust_levels_list.index(max_value) + 1, max_value,
+                            f'Max: {max_value}', verticalalignment='bottom', horizontalalignment='right', color='g')
+                
+                plt.axhline(y=avg_value, color='orange', linestyle='--', label=f'Average: {avg_value}')
+                plt.text(len(dust_levels_list), avg_value, f'Avg: {avg_value}', color='orange', verticalalignment='bottom', horizontalalignment='right')
+
+                chart_filename = f"static/pigRoom/chart/chart_{pig['pigTableID']}.png"
+                plt.savefig(chart_filename)
+                plt.close()
+    except Exception as e:
+        print("Error:", e)
+
+    return render_template('pig-room.html', data=pigs_list)
 
 
 # For cat_room livw streaming

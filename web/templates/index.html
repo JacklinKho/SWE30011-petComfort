@@ -147,43 +147,23 @@
 
 				<div id="tab3" class="tabcontent">
 					<!-- Form for Tab 3 -->
-					<form action="/adjust" method="POST" onsubmit="return validateAdjustForm('tab3')">
+					<form action="/pigAdjust" method="POST" onsubmit="return validateAdjustForm('tab3')">
 						<div class="popup-fields">
 							<div class="popup-field">
 								<label for="fanTemp">Above what temperature (C) should the fan be ON?</label>
-								<!-- <input
-                                    type="number"
-                                    id="fanTemp"
-                                    name="fanTemp"
-                                    value="{{ adjust_data['fanTemp'] if adjust_data else '23' }}"
-                                /> -->
+								<input type="number" id="fanTemp" name="fanTemp" value="{{ pig_adjust_data['fanTemp'] }}" />
 							</div>
 							<div class="popup-field">
 								<label for="dustWindow">Above what dust level should the window be open?</label>
-								<!-- <input
-                                    type="number"
-                                    id="dustWindow"
-                                    name="dustWindow"
-                                    value="{{ adjust_data['dustWindow'] if adjust_data else '20' }}"
-                                /> -->
+								<input type="number" id="dustWindow" name="dustWindow" value="{{ pig_adjust_data['dustWindow'] }}" />
 							</div>
 							<div class="popup-field">
 								<label for="petNumLight">How many pets need to be in the room for the light to be ON?</label>
-								<!-- <input
-                                    type="number"
-                                    id="petNumLight"
-                                    name="petNumLight"
-                                    value="{{ adjust_data['petNumLight'] if adjust_data else '15' }}"
-                                /> -->
+								<input type="number" id="petLight" name="petLight" value="{{ pig_adjust_data['petLight']}}" />
 							</div>
 							<div class="popup-field">
 								<label for="lightThreshold">Distance between pet and IR sensor to count as in or out.</label>
-								<!-- <input
-                                    type="number"
-                                    id="lightThreshold"
-                                    name="lightThreshold"
-                                    value="{{ adjust_data['lightThreshold'] if adjust_data else '30' }}"
-                                /> -->
+								<input type="number" id="irDistance" name="irDistance" value="{{ pig_adjust_data['irDistance'] }}" />
 							</div>
 						</div>
 						<div class="buttons-in-popup-form">
@@ -302,7 +282,7 @@
 								</h2>
 								<div>
 									<label class="switch">
-										<input type="checkbox" id="lightTogglePig" onchange="toggle()" />
+										<input type="checkbox" id="lightTogglePig" onchange="togglePig()" />
 										<span class="slider round"></span>
 									</label>
 								</div>
@@ -313,7 +293,7 @@
 								</h2>
 								<div>
 									<label class="switch">
-										<input type="checkbox" id="fanTogglePig" onchange="toggle()" />
+										<input type="checkbox" id="fanTogglePig" onchange="togglePig()" />
 										<span class="slider round"></span>
 									</label>
 								</div>
@@ -324,7 +304,7 @@
 								</h2>
 								<div>
 									<label class="switch">
-										<input type="checkbox" id="windowTogglePig" onchange="toggle()" />
+										<input type="checkbox" id="windowTogglePig" onchange="togglePig()" />
 										<span class="slider round"></span>
 									</label>
 								</div>
@@ -444,11 +424,37 @@
 				});
 			}
 
+			function sendPigControlCommand(light, fan, window) {
+				console.log("controlcommand");
+				$.ajax({
+					type: "POST",
+					url: "/pigControl",
+					data: {
+						light: light,
+						fan: fan,
+						window: window,
+					},
+					success: function (response) {
+						console.log(response);
+					},
+					error: function (xhr, status, error) {
+						console.error(xhr.responseText);
+					},
+				});
+			}
+
 			function toggle() {
 				var lightState = document.getElementById("lightToggle").checked;
 				var fanState = document.getElementById("fanToggle").checked;
 				var windowState = document.getElementById("windowToggle").checked;
 				sendControlCommand(lightState, fanState, windowState);
+			}
+
+			function togglePig() {
+				var lightState = document.getElementById("lightTogglePig").checked;
+				var fanState = document.getElementById("fanTogglePig").checked;
+				var windowState = document.getElementById("windowTogglePig").checked;
+				sendPigControlCommand(lightState, fanState, windowState);
 			}
 		</script>
 	</body>

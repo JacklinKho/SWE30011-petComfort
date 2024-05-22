@@ -14,7 +14,7 @@
 			<div id="chartModal" class="modal">
 				<div class="modal-content">
 					<span class="close">&times;</span>
-					<img src="{{ url_for('static', filename='Bedroom/tempChart/temperature_chart.png') }}" alt="Chart Image" />
+					<iframe id="liveStream" src="" frameborder="0" allowfullscreen></iframe>
 				</div>
 			</div>
 
@@ -65,16 +65,22 @@
 			var span = document.getElementsByClassName("close")[0];
 
 			btn.onclick = function () {
+				var iframe = document.getElementById("liveStream");
+				iframe.src = "/video_feed"; 
 				modal.style.display = "block";
 			};
 
 			span.onclick = function () {
 				modal.style.display = "none";
+				var iframe = document.getElementById("liveStream");
+				iframe.src = ""; 
 			};
 
 			window.onclick = function (event) {
 				if (event.target == modal) {
 					modal.style.display = "none";
+					var iframe = document.getElementById("liveStream");
+					iframe.src = ""; 
 				}
 			};
 		</script>
