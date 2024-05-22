@@ -20,7 +20,7 @@ cloudDB = mysql.connector.connect(host="database-1.cjjqkkvq5tm1.us-east-1.rds.am
 cloudCursor = cloudDB.cursor(dictionary=True)
 
 localDB = mysql.connector.connect(
-    host="localhost", user="pi", password="123456", database="petcomfort_db")
+    host="localhost", user="pi", password="P@ss1234", database="petcomfort_db")
 localCursor = localDB.cursor(dictionary=True)
 
 localCursor.execute("""
