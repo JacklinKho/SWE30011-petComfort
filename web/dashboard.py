@@ -1,35 +1,163 @@
 import mysql.connector
-import serial
-import threading
-from datetime import datetime
+import json
+from datetime import timedelta
 from flask import Flask, request, render_template, redirect, url_for, session, current_app, Response
 import os
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from picamera2 import Picamera2
+# from picamera2 import Picamera2
 import cv2
 import re
+import requests
+import logging
+import time  #Import time library
+from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
+# Initialize Flask app
 app = Flask(__name__)
-matplotlib.use('Agg')
+app.secret_key = 'your_secret_key'
 
-app.secret_key = 'your secret key'
+# Firebase API key
+FIREBASE_API_KEY = "AIzaSyDSERShIWYu2s6MOjAEujYiD4EgAEgtejY"
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG, filename='app.log', filemode='a',
+                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Connect to MySQL database
 mydb = mysql.connector.connect(host="database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com",
                                user="smartpetcomfort", password="swinburneaaronsarawakidauniversityjacklin", database="petcomfort_db")
 
-with mydb.cursor() as mycursor:
-    mycursor.execute("""
-    CREATE TABLE IF NOT EXISTS Account_Table (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        username VARCHAR(50),
-        password VARCHAR(50),
-        email VARCHAR(50),
-        firebase_id INT UNIQUE
-    )
-    """)
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    msg = ''
+    if request.method == 'POST' and 'password' in request.form and 'email' in request.form:
+        email = request.form['email']
+        password = request.form['password']
+        
+        if not re.match(r'[^@]+@[^@]+\.[^@]+', email):
+            msg = 'Invalid email address!'
+        elif not password or not email:
+            msg = 'Please fill out the form!'
+        else:
+            try:
+                # Data to send to Firebase API
+                data = {
+                    "email": email,
+                    "password": password,
+                    "returnSecureToken": True
+                }
+                
+                # Call Firebase API
+                response = requests.post(
+                    f"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}",
+                    headers={"Content-Type": "application/json"},
+                    json=data
+                )
+                
+                # Check if the request was successful
+                if response.status_code == 200:
+                    msg = 'You have successfully registered!'
+                else:
+                    error_message = response.json().get('error', {}).get('message', 'Registration failed')
+                    logging.error(f"Error during registration: {error_message}")
+                    msg = f"Error during registration: {error_message}"
+            except Exception as e:
+                logging.error(f"Unexpected error: {str(e)}")
+                msg = f"Unexpected error: {str(e)}"
+    elif request.method == 'POST':
+        msg = 'Please fill out the form!'
+    
+    return render_template('register.html', msg=msg)
+
+# Define route for index page
+@app.route('/')
+def index():
+    if 'loggedin' not in session or session['loggedin'] != True:
+        return render_template('login.html')
+    else:
+        cursor = mydb.cursor(dictionary=True)
+        cursor.execute(
+            "SELECT * FROM Cat_Adjust_Table WHERE catAdjustTableID = 1 LIMIT 1")
+        cat_adjust_data = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT * FROM Cat_Control_Table WHERE catControlID = 1 LIMIT 1;")
+        cat_control_data = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT * FROM Dog_Adjust_Table WHERE dogAdjustTableID = 1 LIMIT 1")
+        dog_adjust_data = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT * FROM Dog_Control_Table WHERE dogControlID = 1 LIMIT 1;")
+        dog_control_data = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT * FROM Pig_Adjust_Table WHERE pigAdjustTableID = 1 LIMIT 1")
+        pig_adjust_data = cursor.fetchone()
+
+        cursor.execute(
+            "SELECT * FROM Pig_Control_Table WHERE pigControlID = 1 LIMIT 1;")
+        pig_control_data = cursor.fetchone()
+
+        cursor.execute("SELECT * FROM Mode_Table LIMIT 1")
+        existing_mode = cursor.fetchone()
+        if not existing_mode:
+            cursor.execute("INSERT INTO Mode_Table (control) VALUES ('false')")
+            mydb.commit()
+
+        cursor.close()
+
+        # Call function to continuously insert sensor data
+        return render_template('index.html', cat_adjust_data=cat_adjust_data, cat_control_data=cat_control_data,dog_adjust_data=dog_adjust_data, dog_control_data=dog_control_data, pig_adjust_data=pig_adjust_data, pig_control_data=pig_control_data)
+@app.route('/email_password_login', methods=['GET', 'POST'])
+def email_password_login():
+    msg = ''
+    if request.method == 'POST' and 'email' in request.form and 'password' in request.form:
+        email = request.form['email']
+        password = request.form['password']
+        
+        try:
+            # Data to send to Firebase API
+            data = {
+                "email": email,
+                "password": password,
+                "returnSecureToken": True
+            }
+            
+            # Call Firebase API
+            response = requests.post(
+                f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}",
+                headers={"Content-Type": "application/json"},
+                json=data
+            )
+            
+            # Check if the request was successful
+            if response.status_code == 200:
+                user_data = response.json()
+                session['loggedin'] = True
+                session['user_id'] = user_data['localId']
+                session['email'] = email
+                msg = 'Logged in successfully!'
+                return redirect(url_for('index'))  # Redirect to the root URL after login
+            else:
+                error_message = response.json().get('error', {}).get('message', 'Login failed')
+                print(f"Error during login: {error_message}")
+                msg = 'Incorrect email or password!'
+        except Exception as e:
+            print(f"Error during login: {str(e)}")
+            msg = 'An unexpected error occurred!'
+    
+    return render_template('login.html', msg=msg)
+
+@app.route('/logout')
+def logout():
+    session.pop('loggedin', None)
+    session.pop('user_id', None)
+    session.pop('email', None)
+    return redirect(url_for('email_password_login'))
 
 def update_mode_table(control):
     with mydb.cursor() as cursor:
@@ -220,6 +348,82 @@ def toggle_mode():
     return "Mode updated successfully"
 
 
+@app.route('/globalControl', methods=['POST'])
+def globalControl():
+    # Retrieve states from form data
+    lightState = request.form.get('light') == 'true'
+    fanState = request.form.get('fan') == 'true'
+    windowState = request.form.get('window') == 'true'
+
+    # Create a dictionary to hold the states
+    data = {
+        "lightState": lightState,
+        "fanState": fanState,
+        "windowState": windowState
+    }
+
+    # Convert the dictionary to JSON format
+    payload = json.dumps(data)
+
+    # AWS IoT certificate based connection
+    myMQTTClient = AWSIoTMQTTClient("MyCloudComputer")
+    myMQTTClient.configureEndpoint("aadckvyc4ktri-ats.iot.us-east-1.amazonaws.com", 8883)
+    myMQTTClient.configureCredentials("/home/ubuntu/swe30011/cert/AmazonRootCA1.pem", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-private.pem.key", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-certificate.pem.crt")
+    myMQTTClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
+    myMQTTClient.configureDrainingFrequency(2)  # Draining: 2 Hz
+    myMQTTClient.configureConnectDisconnectTimeout(10)  # 10 sec
+    myMQTTClient.configureMQTTOperationTimeout(5)  # 5 sec
+
+    # Connect to AWS IoT
+    myMQTTClient.connect()
+
+    # Publish the JSON payload to a topic
+    myMQTTClient.publish("home/devices/state", payload, 0)
+
+    # Disconnect from AWS IoT
+    myMQTTClient.disconnect()
+
+    # with mydb.cursor() as cursor:
+    #     # Check if a record already exists in the table
+    #     cursor.execute("SELECT * FROM Dog_Control_Table LIMIT 1")
+    #     existing_record = cursor.fetchone()
+
+    #     if existing_record:
+    #         # Construct the SQL query to update only the changed fields
+    #         cursor.execute(
+    #             f"UPDATE Dog_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE dogControlID = 1")
+    #     else:
+    #         # Insert new record if no existing record found
+    #         sql = "INSERT INTO Dog_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
+    #         cursor.execute(sql, (lightState, fanState, windowState))
+
+    #     # Repeat the same process for other tables
+    #     # Cat Control Table
+    #     cursor.execute("SELECT * FROM Cat_Control_Table LIMIT 1")
+    #     existing_record = cursor.fetchone()
+
+    #     if existing_record:
+    #         cursor.execute(
+    #             f"UPDATE Cat_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE catControlID = 1")
+    #     else:
+    #         sql = "INSERT INTO Cat_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
+    #         cursor.execute(sql, (lightState, fanState, windowState))
+
+    #     # Pig Control Table
+    #     cursor.execute("SELECT * FROM Pig_Control_Table LIMIT 1")
+    #     existing_record = cursor.fetchone()
+
+    #     if existing_record:
+    #         cursor.execute(
+    #             f"UPDATE Pig_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE pigControlID = 1")
+    #     else:
+    #         sql = "INSERT INTO Pig_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
+    #         cursor.execute(sql, (lightState, fanState, windowState))
+
+    # Commit all changes after executing all SQL statements
+    # mydb.commit()
+    
+    
 @app.route('/catControl', methods=['POST'])
 def catControl():
     lightState = request.form.get('light') == 'true'
@@ -306,44 +510,11 @@ def pigControl():
 
     return "Data stored successfully"
 
-# Define route for index page
-@app.route('/')
-def index():
-    cursor = mydb.cursor(dictionary=True)
-    cursor.execute(
-        "SELECT * FROM Cat_Adjust_Table WHERE catAdjustTableID = 1 LIMIT 1")
-    cat_adjust_data = cursor.fetchone()
-
-    cursor.execute(
-        "SELECT * FROM Cat_Control_Table WHERE catControlID = 1 LIMIT 1;")
-    cat_control_data = cursor.fetchone()
-
-    cursor.execute(
-        "SELECT * FROM Dog_Adjust_Table WHERE dogAdjustTableID = 1 LIMIT 1")
-    dog_adjust_data = cursor.fetchone()
-
-    cursor.execute(
-        "SELECT * FROM Dog_Control_Table WHERE dogControlID = 1 LIMIT 1;")
-    dog_control_data = cursor.fetchone()
-
-    cursor.execute(
-        "SELECT * FROM Pig_Adjust_Table WHERE pigAdjustTableID = 1 LIMIT 1")
-    pig_adjust_data = cursor.fetchone()
-
-    cursor.execute(
-        "SELECT * FROM Pig_Control_Table WHERE pigControlID = 1 LIMIT 1;")
-    pig_control_data = cursor.fetchone()
-
-    cursor.execute("SELECT * FROM Mode_Table LIMIT 1")
-    existing_mode = cursor.fetchone()
-    if not existing_mode:
-        cursor.execute("INSERT INTO Mode_Table (control) VALUES ('false')")
-        mydb.commit()
-
-    cursor.close()
-
-    # Call function to continuously insert sensor data
-    return render_template('index.html', cat_adjust_data=cat_adjust_data, cat_control_data=cat_control_data,dog_adjust_data=dog_adjust_data, dog_control_data=dog_control_data, pig_adjust_data=pig_adjust_data, pig_control_data=pig_control_data)
+# Define route to render catRoom page
+@app.route('/main-room')
+def mainRoom():
+    
+    return render_template('global.html')
 
 # Define route to render catRoom page
 @app.route('/cat-room')
@@ -368,14 +539,9 @@ def catRoom():
             cats[row['catTableID']]['dust_levels'].append(row['dustLevel'])
 
     cursor.close()
+
     cats_list = list(cats.values())
     # print(cats_list)
-
-    cursor2 = mydb.cursor(dictionary=True)
-    cursor2.execute("SELECT * FROM Cat_Table ORDER BY catTableID DESC LIMIT 1")
-    last_row = cursor2.fetchone()
-    last_petCount = last_row['petCount']
-    cursor2.close()    
 
     try:
         for cat in cats_list:
@@ -415,7 +581,7 @@ def catRoom():
     except Exception as e:
         print("Error:", e)
 
-    return render_template('cat-room.html', data=cats_list, last_petCount=last_petCount)
+    return render_template('cat-room.html', data=cats_list)
 
 # Define route to render dogRoom page
 @app.route('/dog-room')
@@ -443,12 +609,6 @@ def dogRoom():
 
     dogs_list = list(dogs.values())
     # print(dogs_list)
-
-    cursor2 = mydb.cursor(dictionary=True)
-    cursor2.execute("SELECT * FROM Dog_Table ORDER BY dogTableID DESC LIMIT 1")
-    last_row = cursor2.fetchone()
-    last_petCount = last_row['petCount']
-    cursor2.close()  
 
     try:
         for dog in dogs_list:
@@ -488,7 +648,7 @@ def dogRoom():
     except Exception as e:
         print("Error:", e)
 
-    return render_template('dog-room.html', data=dogs_list, last_petCount=last_petCount)
+    return render_template('dog-room.html', data=dogs_list)
 
 # Define route to render pigRoom page
 @app.route('/pig-room')
@@ -516,12 +676,6 @@ def pigRoom():
 
     pigs_list = list(pigs.values())
     # print(pigs_list)
-
-    cursor2 = mydb.cursor(dictionary=True)
-    cursor2.execute("SELECT * FROM Pig_Table ORDER BY pigTableID DESC LIMIT 1")
-    last_row = cursor2.fetchone()
-    last_petCount = last_row['petCount']
-    cursor2.close()  
 
     try:
         for pig in pigs_list:
@@ -557,14 +711,14 @@ def pigRoom():
     except Exception as e:
         print("Error:", e)
 
-    return render_template('pig-room.html', data=pigs_list, last_petCount=last_petCount)
+    return render_template('pig-room.html', data=pigs_list)
 
 
-# For cat_room livw streaming
-camera = Picamera2()
-camera.configure(camera.create_preview_configuration(
-    main={"format": 'XRGB8888', "size": (640, 480)}))
-camera.start()
+# # For cat_room livw streaming
+# camera = Picamera2()
+# camera.configure(camera.create_preview_configuration(
+#     main={"format": 'XRGB8888', "size": (640, 480)}))
+# camera.start()
 
 
 def generate_frames():
@@ -578,3 +732,7 @@ def generate_frames():
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+if __name__ == '__main__':
+    app.run()
