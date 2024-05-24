@@ -543,6 +543,12 @@ def catRoom():
     cats_list = list(cats.values())
     # print(cats_list)
 
+    cursor2 = mydb.cursor(dictionary=True)
+    cursor2.execute("SELECT * FROM Cat_Table ORDER BY catTableID DESC LIMIT 1")
+    last_row = cursor2.fetchone()
+    last_petCount = last_row['petCount']
+    cursor2.close()
+
     try:
         for cat in cats_list:
             dust_levels_list = cat['dust_levels']
@@ -581,7 +587,7 @@ def catRoom():
     except Exception as e:
         print("Error:", e)
 
-    return render_template('cat-room.html', data=cats_list)
+    return render_template('cat-room.html', data=cats_list, last_petCount=last_petCount)
 
 # Define route to render dogRoom page
 @app.route('/dog-room')
@@ -609,6 +615,12 @@ def dogRoom():
 
     dogs_list = list(dogs.values())
     # print(dogs_list)
+
+    cursor2 = mydb.cursor(dictionary=True)
+    cursor2.execute("SELECT * FROM Dog_Table ORDER BY dogTableID DESC LIMIT 1")
+    last_row = cursor2.fetchone()
+    last_petCount = last_row['petCount']
+    cursor2.close()  
 
     try:
         for dog in dogs_list:
@@ -648,7 +660,7 @@ def dogRoom():
     except Exception as e:
         print("Error:", e)
 
-    return render_template('dog-room.html', data=dogs_list)
+    return render_template('dog-room.html', data=dogs_list, last_petCount=last_petCount)
 
 # Define route to render pigRoom page
 @app.route('/pig-room')
@@ -676,6 +688,12 @@ def pigRoom():
 
     pigs_list = list(pigs.values())
     # print(pigs_list)
+
+    cursor2 = mydb.cursor(dictionary=True)
+    cursor2.execute("SELECT * FROM Pig_Table ORDER BY pigTableID DESC LIMIT 1")
+    last_row = cursor2.fetchone()
+    last_petCount = last_row['petCount']
+    cursor2.close() 
 
     try:
         for pig in pigs_list:
@@ -711,7 +729,7 @@ def pigRoom():
     except Exception as e:
         print("Error:", e)
 
-    return render_template('pig-room.html', data=pigs_list)
+    return render_template('pig-room.html', data=pigs_list, last_petCount=last_petCount)
 
 
 # # For cat_room livw streaming
