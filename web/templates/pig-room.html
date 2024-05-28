@@ -12,12 +12,12 @@
 			<!-- pass the last_petCount here -->
 			<h2 class="subtitle">Total pet inside: {{ last_petCount }}</h2>
             <div class="button-container">
-                <button id="openModalBtn" class="btn">Live Streaming</button>
+                <button id="openModalBtn" class="btn" onclick="captureImage()">View Room</button>
             </div>
             <div id="chartModal" class="modal">
 				<div class="modal-content">
 					<span class="close">&times;</span>
-					<iframe id="liveStream" src="" frameborder="0" allowfullscreen></iframe>				
+					<img id="capturedImage" src="" alt="Picam Image" />				
 				</div>
 			</div>
 
@@ -37,7 +37,7 @@
                 </div>
                 <div class="data-row">
                     <div class="data-label">Temperature:</div>
-                    <div class="data-value"> {{ row["temperature_C"] }}°C / {{ row["temperature_F"] }}°F </div>
+                    <div class="data-value"> {{ row["temperature_C"] }}Â°C / {{ row["temperature_F"] }}Â°F </div>
                 </div>
                 <div class="data-row">
                     <div class="data-label">Light:</div>
@@ -67,25 +67,29 @@
 			var btn = document.getElementById("openModalBtn");
 			var span = document.getElementsByClassName("close")[0];
 
-			btn.onclick = function () {
-				var iframe = document.getElementById("liveStream");
-				iframe.src = "/video_feed"; 
+			btn.onclick = function() {
 				modal.style.display = "block";
-			};
+			}
 
-			span.onclick = function () {
+			span.onclick = function() {
 				modal.style.display = "none";
-				var iframe = document.getElementById("liveStream");
-				iframe.src = ""; 
-			};
+			}
 
-			window.onclick = function (event) {
+			window.onclick = function(event) {
 				if (event.target == modal) {
 					modal.style.display = "none";
-					var iframe = document.getElementById("liveStream");
-					iframe.src = ""; 
 				}
-			};
+			}
+
+			function captureImage() {
+				fetch('/capture-pig-image')
+					.then(response => response.json())
+					.then(data => {
+						img.src = data.image_path;
+						modal.style.display = "block";
+					})
+					.catch(error => console.error('Error:', error));
+        	}
 		</script>
     </body>
 </html>

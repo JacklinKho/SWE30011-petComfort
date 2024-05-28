@@ -6,7 +6,7 @@ import os
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-# from picamera2 import Picamera2
+from picamera2 import Picamera2
 import cv2
 import re
 import requests
@@ -167,7 +167,7 @@ def update_mode_table(control):
         
        
 @app.route('/globalAdjust', methods=['POST'])
-def pigAdjust():
+def globalAdjust():
     if request.method == 'POST':
         # Form data
         fanTemp = request.form['fanTemp']
@@ -175,7 +175,7 @@ def pigAdjust():
         petLight = request.form['petLight']
         irDistance = request.form['irDistance']
         
-                # Create a dictionary to hold the states
+        # Create a dictionary to hold the states
         data = {
             "fanTemp": fanTemp,
             "dustWindow": dustWindow,
@@ -732,26 +732,28 @@ def pigRoom():
 
     return render_template('pig-room.html', data=pigs_list, last_petCount=last_petCount)
 
+camera = Picamera2()
+camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)}))
+camera.start()
 
-# # For cat_room livw streaming
-# camera = Picamera2()
-# camera.configure(camera.create_preview_configuration(
-#     main={"format": 'XRGB8888', "size": (640, 480)}))
-# camera.start()
+# Function to capture an image
+def capture_image(roomName):
+    frame = camera.capture_array()
+    filename = f'static/{roomName}/picam/picam.png'
+    cv2.imwrite(filename, frame)
+    return filename
 
+@app.route('/capture-pig-image', methods=['GET'])
+def capture_image_route():
+    room_name = 'PigRoom'
+    filename = capture_image(room_name)
+    return {"image_path": filename}
 
-def generate_frames():
-    while True:
-        frame = camera.capture_array()
-        ret, buffer = cv2.imencode('.jpg', frame)
-        frame = buffer.tobytes()
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-
-@app.route('/video_feed')
-def video_feed():
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
-
+@app.route('/capture-cat-image', methods=['GET'])
+def capture_image_route():
+    room_name = 'CatRoom'
+    filename = capture_image(room_name)
+    return {"image_path": filename}
 
 if __name__ == '__main__':
     app.run()
