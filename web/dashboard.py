@@ -167,7 +167,7 @@ def update_mode_table(control):
         
        
 @app.route('/globalAdjust', methods=['POST'])
-def pigAdjust():
+def globalAdjust():
     if request.method == 'POST':
         # Form data
         fanTemp = request.form['fanTemp']
