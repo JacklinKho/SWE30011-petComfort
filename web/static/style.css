@@ -520,7 +520,7 @@ input:checked + .slider:before {
 .textbox {
   padding: 10px 40px;
   background-color: #fff;
-  color: #ffffff;
+  color: #000;
   border-radius: 10px;
 }
 
