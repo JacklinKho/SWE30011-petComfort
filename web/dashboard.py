@@ -164,6 +164,48 @@ def update_mode_table(control):
         sql = "INSERT INTO Mode_Table (control) VALUES (%s) ON DUPLICATE KEY UPDATE control = VALUES(control)"
         cursor.execute(sql, (control,))
         mydb.commit()
+        
+       
+@app.route('/globalAdjust', methods=['POST'])
+def pigAdjust():
+    if request.method == 'POST':
+        # Form data
+        fanTemp = request.form['fanTemp']
+        dustWindow = request.form['dustWindow']
+        petLight = request.form['petLight']
+        irDistance = request.form['irDistance']
+        
+                # Create a dictionary to hold the states
+        data = {
+            "fanTemp": fanTemp,
+            "dustWindow": dustWindow,
+            "petLight": petLight,
+            "irDistance": irDistance,
+        }
+
+        # Convert the dictionary to JSON format
+        payload = json.dumps(data)
+        
+        # AWS IoT certificate based connection
+        myMQTTClient = AWSIoTMQTTClient("MyCloudComputer")
+        myMQTTClient.configureEndpoint("aadckvyc4ktri-ats.iot.us-east-1.amazonaws.com", 8883)
+        myMQTTClient.configureCredentials("/home/ubuntu/swe30011/cert/AmazonRootCA1.pem", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-private.pem.key", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-certificate.pem.crt")
+        myMQTTClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
+        myMQTTClient.configureDrainingFrequency(2)  # Draining: 2 Hz
+        myMQTTClient.configureConnectDisconnectTimeout(10)  # 10 sec
+        myMQTTClient.configureMQTTOperationTimeout(5)  # 5 sec
+
+        # Connect to AWS IoT
+        myMQTTClient.connect()
+
+        # Publish the JSON payload to a topic
+        myMQTTClient.publish("home/devices/threshold", payload, 0)
+
+        # Disconnect from AWS IoT
+        myMQTTClient.disconnect()
+
+        # Redirect to a success page or render a success message
+        return render_template('global.html')
 
 @app.route('/catAdjust', methods=['POST'])
 def catAdjust():
@@ -381,48 +423,7 @@ def globalControl():
     myMQTTClient.publish("home/devices/state", payload, 0)
 
     # Disconnect from AWS IoT
-    myMQTTClient.disconnect()
-
-    # with mydb.cursor() as cursor:
-    #     # Check if a record already exists in the table
-    #     cursor.execute("SELECT * FROM Dog_Control_Table LIMIT 1")
-    #     existing_record = cursor.fetchone()
-
-    #     if existing_record:
-    #         # Construct the SQL query to update only the changed fields
-    #         cursor.execute(
-    #             f"UPDATE Dog_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE dogControlID = 1")
-    #     else:
-    #         # Insert new record if no existing record found
-    #         sql = "INSERT INTO Dog_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
-    #         cursor.execute(sql, (lightState, fanState, windowState))
-
-    #     # Repeat the same process for other tables
-    #     # Cat Control Table
-    #     cursor.execute("SELECT * FROM Cat_Control_Table LIMIT 1")
-    #     existing_record = cursor.fetchone()
-
-    #     if existing_record:
-    #         cursor.execute(
-    #             f"UPDATE Cat_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE catControlID = 1")
-    #     else:
-    #         sql = "INSERT INTO Cat_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
-    #         cursor.execute(sql, (lightState, fanState, windowState))
-
-    #     # Pig Control Table
-    #     cursor.execute("SELECT * FROM Pig_Control_Table LIMIT 1")
-    #     existing_record = cursor.fetchone()
-
-    #     if existing_record:
-    #         cursor.execute(
-    #             f"UPDATE Pig_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE pigControlID = 1")
-    #     else:
-    #         sql = "INSERT INTO Pig_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
-    #         cursor.execute(sql, (lightState, fanState, windowState))
-
-    # Commit all changes after executing all SQL statements
-    # mydb.commit()
-    
+    myMQTTClient.disconnect() 
     
 @app.route('/catControl', methods=['POST'])
 def catControl():

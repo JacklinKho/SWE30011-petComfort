@@ -1,0 +1,7 @@
+mysql-connector-python
+Flask
+matplotlib
+numpy
+opencv-python
+requests
+AWSIoTPythonSDK
