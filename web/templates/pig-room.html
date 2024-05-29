@@ -12,7 +12,7 @@
 			<!-- pass the last_petCount here -->
 			<h2 class="subtitle">Total pet inside: {{ last_petCount }}</h2>
             <div class="button-container">
-                <button id="openModalBtn" class="btn" onclick="captureImage()">View Room</button>
+                <button id="openModalBtn" class="btn">View Room</button>
             </div>
             <div id="chartModal" class="modal">
 				<div class="modal-content">
@@ -69,6 +69,14 @@
 
 			btn.onclick = function() {
 				modal.style.display = "block";
+				fetch("/capture-pig-image")
+					.then(response => response.json())
+					.then(data => {
+						var img = document.getElementById("capturedImage");
+						img.src = data.image_path;
+						modal.style.display = "block";
+					})
+					.catch(error => console.error("Error:", error));
 			}
 
 			span.onclick = function() {
@@ -80,16 +88,6 @@
 					modal.style.display = "none";
 				}
 			}
-
-			function captureImage() {
-				fetch('/capture-pig-image')
-					.then(response => response.json())
-					.then(data => {
-						img.src = data.image_path;
-						modal.style.display = "block";
-					})
-					.catch(error => console.error('Error:', error));
-        	}
 		</script>
     </body>
 </html>

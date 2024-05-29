@@ -11,7 +11,7 @@
 			<!-- pass the last_petCount here -->
 			<h2 class="subtitle">Total pet inside: {{ last_petCount }}</h2>
 			<div class="button-container">
-                <button id="openModalBtn" class="btn" onclick="captureImage()">View Room</button>
+                <button id="openModalBtn" class="btn">View Room</button>
             </div>
             <div id="chartModal" class="modal">
 				<div class="modal-content">
@@ -36,7 +36,7 @@
 				</div>
 				<div class="data-row">
 					<div class="data-label">Temperature:</div>
-					<div class="data-value">{{ row["temperature_C"] }}Â°C / {{ row["temperature_F"] }}Â°F</div>
+					<div class="data-value">{{ row["temperature_C"] }}°C / {{ row["temperature_F"] }}°F</div>
 				</div>
 				<div class="data-row">
 					<div class="data-label">Light:</div>
@@ -68,6 +68,14 @@
 
 			btn.onclick = function() {
 				modal.style.display = "block";
+				fetch("/capture-cat-image")
+					.then(response => response.json())
+					.then(data => {
+						var img = document.getElementById("capturedImage");
+						img.src = data.image_path;
+						modal.style.display = "block";
+					})
+					.catch(error => console.error("Error:", error));
 			}
 
 			span.onclick = function() {
@@ -79,16 +87,6 @@
 					modal.style.display = "none";
 				}
 			}
-
-			function captureImage() {
-				fetch('/capture-cat-image')
-					.then(response => response.json())
-					.then(data => {
-						img.src = data.image_path;
-						modal.style.display = "block";
-					})
-					.catch(error => console.error('Error:', error));
-        	}
 		</script>
 	</body>
 </html>

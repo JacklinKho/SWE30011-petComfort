@@ -15,7 +15,7 @@ import time  #Import time library
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(_name_)
 app.secret_key = 'your_secret_key'
 
 # Firebase API key
@@ -554,7 +554,7 @@ def catRoom():
         for cat in cats_list:
             dust_levels_list = cat['dust_levels']
             # print(dust_levels_list)
-            if dust_levels_list.__len__() > 0:
+            if dust_levels_list._len_() > 0:
                 plt.plot(np.arange(1, len(dust_levels_list) + 1), dust_levels_list)
                 plt.xlabel('Reading')
                 plt.ylabel('Dust Levels')
@@ -626,7 +626,7 @@ def dogRoom():
         for dog in dogs_list:
             dust_levels_list = dog['dust_levels']
             # print(dust_levels_list)
-            if dust_levels_list.__len__() > 0:
+            if dust_levels_list._len_() > 0:
                 plt.plot(np.arange(1, len(dust_levels_list) + 1),
                          dust_levels_list)
                 plt.xlabel('Reading')
@@ -699,7 +699,7 @@ def pigRoom():
         for pig in pigs_list:
             dust_levels_list = pig['dust_levels']
             # print(dust_levels_list)
-            if dust_levels_list.__len__() > 0:
+            if dust_levels_list._len_() > 0:
                 plt.plot(np.arange(1, len(dust_levels_list) + 1),
                          dust_levels_list)
                 plt.xlabel('Reading')
@@ -735,24 +735,26 @@ camera = Picamera2()
 camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)}))
 camera.start()
 
-# Function to capture an image
-def capture_image(roomName):
-    frame = camera.capture_array()
-    filename = f'static/{roomName}/picam/picam.png'
-    cv2.imwrite(filename, frame)
-    return filename
-
 @app.route('/capture-pig-image', methods=['GET'])
-def capture_image_route():
-    room_name = 'PigRoom'
-    filename = capture_image(room_name)
+def capture_image_route_pig():
+    frame = camera.capture_array()
+    filename = f'static/pigRoom/picam/pigPicam.jpg'
+    cv2.imwrite(filename, frame)
     return {"image_path": filename}
 
 @app.route('/capture-cat-image', methods=['GET'])
-def capture_image_route():
-    room_name = 'CatRoom'
-    filename = capture_image(room_name)
+def capture_image_route_cat():
+    frame = camera.capture_array()
+    filename = f'static/catRoom/picam/catPicam.jpg'
+    cv2.imwrite(filename, frame)
     return {"image_path": filename}
 
-if __name__ == '__main__':
+@app.route('/capture-dog-image', methods=['GET'])
+def capture_image_route_pig():
+    frame = camera.capture_array()
+    filename = f'static/dogRoom/picam/dogPicam.jpg'
+    cv2.imwrite(filename, frame)
+    return {"image_path": filename}
+
+if _name_ == '_main_':
     app.run()

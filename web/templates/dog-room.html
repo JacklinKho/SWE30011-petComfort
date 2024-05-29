@@ -12,12 +12,12 @@
 			<!-- pass the last_petCount here -->
 			<h2 class="subtitle">Total pet inside: {{ last_petCount }}</h2>
             <div class="button-container">
-                <button id="openModalBtn" class="btn">Live Streaming</button>
+                <button id="openModalBtn" class="btn">View Room</button>
             </div>
             <div id="chartModal" class="modal">
 				<div class="modal-content">
 					<span class="close">&times;</span>
-					<iframe id="liveStream" src="" frameborder="0" allowfullscreen></iframe>				
+					<img id="capturedImage" src="" alt="Picam Image" />				
 				</div>
 			</div>
 
@@ -67,25 +67,27 @@
 			var btn = document.getElementById("openModalBtn");
 			var span = document.getElementsByClassName("close")[0];
 
-			btn.onclick = function () {
-				var iframe = document.getElementById("liveStream");
-				iframe.src = "/video_feed"; 
+			btn.onclick = function() {
 				modal.style.display = "block";
-			};
+				fetch("/capture-dog-image")
+					.then(response => response.json())
+					.then(data => {
+						var img = document.getElementById("capturedImage");
+						img.src = data.image_path;
+						modal.style.display = "block";
+					})
+					.catch(error => console.error("Error:", error));
+			}
 
-			span.onclick = function () {
+			span.onclick = function() {
 				modal.style.display = "none";
-				var iframe = document.getElementById("liveStream");
-				iframe.src = ""; 
-			};
+			}
 
-			window.onclick = function (event) {
+			window.onclick = function(event) {
 				if (event.target == modal) {
 					modal.style.display = "none";
-					var iframe = document.getElementById("liveStream");
-					iframe.src = ""; 
 				}
-			};
+			}
 		</script>
     </body>
 </html>
