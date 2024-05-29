@@ -1,13 +1,15 @@
 import json
 import mysql.connector
 import paho.mqtt.client as mqtt
+import time
 
 # Define a callback function to handle incoming messages
-def on_connectControl(client, userdata, flags, rc):
+def on_connect(client, userdata, flags, rc):
     print(f"Connected with result code {rc}")
-    client.subscribe("home/devices/state")  # Subscribe to the topic
+    client.subscribe("home/devices/state")  # Subscribe to the state topic
+    client.subscribe("home/devices/threshold")  # Subscribe to the threshold topic
 
-def on_messageControl(client, userdata, msg):
+def on_message(client, userdata, msg):
     print("Message received from topic: {}".format(msg.topic))
     
     try:
@@ -20,7 +22,15 @@ def on_messageControl(client, userdata, msg):
     print("Received message payload:")
     print(json.dumps(payload, indent=2))
     
-    # Extract states from payload
+    # Check which topic the message is from and process accordingly
+    if msg.topic == "home/devices/state":
+        process_state_message(payload)
+    elif msg.topic == "home/devices/threshold":
+        process_threshold_message(payload)
+    else:
+        print("Unknown topic")
+
+def process_state_message(payload):
     lightState = payload.get('lightState')
     fanState = payload.get('fanState')
     windowState = payload.get('windowState')
@@ -69,24 +79,7 @@ def on_messageControl(client, userdata, msg):
         cloudDB.close()
         print("Cloud database connection closed")
         
-# Define a callback function to handle incoming messages
-def on_connectAdjust(client, userdata, flags, rc):
-    print(f"Connected with result code {rc}")
-    client.subscribe("home/devices/threshold")  # Subscribe to the topic
-
-def on_messageAdjust(client, userdata, msg):
-    print("Message received from topic: {}".format(msg.topic))
-    
-    try:
-        payload = json.loads(msg.payload.decode())
-    except json.JSONDecodeError as e:
-        print(f"Failed to decode JSON payload: {e}")
-        return
-
-    # Print the received data
-    print("Received message payload:")
-    print(json.dumps(payload, indent=2))
-    
+def process_threshold_message(payload):
     fanTemp = payload.get('fanTemp')
     dustWindow = payload.get('dustWindow')
     petLight = payload.get('petLight')
@@ -111,24 +104,24 @@ def on_messageAdjust(client, userdata, msg):
     
     cloudCursor = cloudDB.cursor(dictionary=True)
 
-    # Insert data into Pig_Control_Table for cloud database
+    # Insert data into Pig_Adjust_Table for cloud database
     try:
-        with cloudCursor.cursor() as cursor:
-                # Check if a record already exists in the table
-                cursor.execute("SELECT * FROM Pig_Adjust_Table")
-                existing_record = cursor.fetchone()
+        with cloudDB.cursor() as cursor:
+            # Check if a record already exists in the table
+            cursor.execute("SELECT * FROM Pig_Adjust_Table")
+            existing_record = cursor.fetchone()
 
-                if existing_record:
-                    # Update existing record
-                    sql = "UPDATE Pig_Adjust_Table SET fanTemp=%s, dustWindow=%s, petLight=%s, irDistance=%s"
-                    val = (fanTemp, dustWindow, petLight, irDistance)
-                else:
-                    # Insert new record
-                    sql = "INSERT INTO Pig_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (%s, %s, %s, %s)"
-                    val = (fanTemp, dustWindow, petLight, irDistance)
+            if existing_record:
+                # Update existing record
+                sql = "UPDATE Pig_Adjust_Table SET fanTemp=%s, dustWindow=%s, petLight=%s, irDistance=%s"
+                val = (fanTemp, dustWindow, petLight, irDistance)
+            else:
+                # Insert new record
+                sql = "INSERT INTO Pig_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (%s, %s, %s, %s)"
+                val = (fanTemp, dustWindow, petLight, irDistance)
 
-                    cursor.execute(sql, val)
-                    cloudCursor.commit()
+            cursor.execute(sql, val)
+            cloudDB.commit()
 
         print("Changes committed to cloud database")
     except mysql.connector.Error as err:
@@ -138,40 +131,33 @@ def on_messageAdjust(client, userdata, msg):
         cloudDB.close()
         print("Cloud database connection closed")
 
+
 # Paho MQTT client setup
-client1 = mqtt.Client()
-client1.on_connect = on_connectControl
-client1.on_message = on_messageControl
+client = mqtt.Client()
+client.on_connect = on_connect
+client.on_message = on_message
 
 # Connect to the MQTT broker
 broker_address = "aadckvyc4ktri-ats.iot.us-east-1.amazonaws.com"
 broker_port = 8883
-client1.tls_set(ca_certs="/home/pi/swe30011/cert/AmazonRootCA1.pem",
+client.tls_set(ca_certs="/home/pi/swe30011/cert/AmazonRootCA1.pem",
                certfile="/home/pi/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-certificate.pem.crt",
                keyfile="/home/pi/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-private.pem.key")
 
 print("Connecting to MQTT broker...")
-client1.connect(broker_address, broker_port, 60)
+client.connect(broker_address, broker_port, 60)
 print("Connected to MQTT broker")
 
-# Blocking call that processes network traffic, dispatches callbacks and handles reconnecting.
-client1.loop_forever()
+# Start the client loop
+client.loop_start()
 
-# Paho MQTT client setup
-client2 = mqtt.Client()
-client2.on_connect = on_connectAdjust
-client2.on_message = on_messageAdjust
+# Keep the script running
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    print("Exiting...")
 
-# Connect to the MQTT broker
-broker_address = "aadckvyc4ktri-ats.iot.us-east-1.amazonaws.com"
-broker_port = 8883
-client2.tls_set(ca_certs="/home/pi/swe30011/cert/AmazonRootCA1.pem",
-               certfile="/home/pi/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-certificate.pem.crt",
-               keyfile="/home/pi/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-private.pem.key")
-
-print("Connecting to MQTT broker...")
-client2.connect(broker_address, broker_port, 60)
-print("Connected to MQTT broker")
-
-# Blocking call that processes network traffic, dispatches callbacks and handles reconnecting.
-client2.loop_forever()
+# Stop the MQTT client
+client.loop_stop()
+client.disconnect()
