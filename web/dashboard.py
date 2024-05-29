@@ -581,7 +581,13 @@ def catRoom():
                 plt.text(len(dust_levels_list), avg_value, f'Avg: {avg_value}', color='orange',
                          verticalalignment='bottom', horizontalalignment='right')
 
-                chart_filename = f"static/catRoom/chart/chart_{cat['catTableID']}.png"
+                chart_directory = 'static/catRoom/chart'
+                chart_filename = f"{chart_directory}/chart_{cat['catTableID']}.png"
+
+                # Create the directory if it does not exist
+                if not os.path.exists(chart_directory):
+                    os.makedirs(chart_directory)
+
                 plt.savefig(chart_filename)
                 plt.close()
     except Exception as e:
@@ -653,8 +659,14 @@ def dogRoom():
                             label=f'Average: {avg_value}')
                 plt.text(len(dust_levels_list), avg_value, f'Avg: {avg_value}', color='orange',
                          verticalalignment='bottom', horizontalalignment='right')
-                
-                chart_filename = f"static/dogRoom/chart/chart_{dog['dogTableID']}.png"
+
+                chart_directory = 'static/dogRoom/chart'
+                chart_filename = f"{chart_directory}/chart_{dog['dogTableID']}.png"
+
+                # Create the directory if it does not exist
+                if not os.path.exists(chart_directory):
+                    os.makedirs(chart_directory)
+
                 plt.savefig(chart_filename)
                 plt.close()
     except Exception as e:
@@ -723,7 +735,13 @@ def pigRoom():
                 plt.axhline(y=avg_value, color='orange', linestyle='--', label=f'Average: {avg_value}')
                 plt.text(len(dust_levels_list), avg_value, f'Avg: {avg_value}', color='orange', verticalalignment='bottom', horizontalalignment='right')
 
-                chart_filename = f"static/pigRoom/chart/chart_{pig['pigTableID']}.png"
+                chart_directory = 'static/pigRoom/chart'
+                chart_filename = f"{chart_directory}/chart_{pig['pigTableID']}.png"
+
+                # Create the directory if it does not exist
+                if not os.path.exists(chart_directory):
+                    os.makedirs(chart_directory)
+
                 plt.savefig(chart_filename)
                 plt.close()
     except Exception as e:
@@ -735,24 +753,34 @@ camera = Picamera2()
 camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)}))
 camera.start()
 
-@app.route('/capture-pig-image', methods=['GET'])
-def capture_image_route_pig():
-    frame = camera.capture_array()
-    filename = f'static/pigRoom/picam/pigPicam.jpg'
-    cv2.imwrite(filename, frame)
-    return {"image_path": filename}
-
 @app.route('/capture-cat-image', methods=['GET'])
 def capture_image_route_cat():
     frame = camera.capture_array()
-    filename = f'static/catRoom/picam/catPicam.jpg'
+    directory = 'static/catRoom/picam'
+    filename = f'{directory}/catPicam.jpg'
+    if not os.path.exists(directory):
+        os.makedirs(directory)
     cv2.imwrite(filename, frame)
     return {"image_path": filename}
 
-@app.route('/capture-dog-image', methods=['GET'])
+@app.route('/capture-pig-image', methods=['GET'])
 def capture_image_route_pig():
     frame = camera.capture_array()
-    filename = f'static/dogRoom/picam/dogPicam.jpg'
+    directory = 'static/pigRoom/picam'
+    filename = f'{directory}/pigPicam.jpg'
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    cv2.imwrite(filename, frame)
+    return {"image_path": filename}
+
+
+@app.route('/capture-dog-image', methods=['GET'])
+def capture_image_route_dog():
+    frame = camera.capture_array()
+    directory = 'static/dogRoom/picam'
+    filename = f'{directory}/dogPicam.jpg'
+    if not os.path.exists(directory):
+        os.makedirs(directory)
     cv2.imwrite(filename, frame)
     return {"image_path": filename}
 
