@@ -555,8 +555,7 @@ def catRoom():
             dust_levels_list = cat['dust_levels']
             # print(dust_levels_list)
             if dust_levels_list.__len__() > 0:
-                plt.plot(np.arange(1, len(dust_levels_list) + 1),
-                         dust_levels_list)
+                plt.plot(np.arange(1, len(dust_levels_list) + 1), dust_levels_list)
                 plt.xlabel('Reading')
                 plt.ylabel('Dust Levels')
                 plt.title('Dust Level Readings')
