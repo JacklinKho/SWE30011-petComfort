@@ -18,7 +18,7 @@ import time  #Import time library
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 
 # Initialize Flask app
-app = Flask(__name__)
+app = Flask(_name_)
 app.secret_key = 'your_secret_key'
 
 # Firebase API key
