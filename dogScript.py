@@ -3,21 +3,17 @@ import serial
 import time
 import json
 from datetime import datetime
-# import matplotlib.pyplot as plt
-# import numpy as np
 import os
 import asyncio
+import cv2
 import pymysql.cursors
 import threading
+from picamera2 import Picamera2
 from SerialInterface import SerialInterface
+from dogGlobalMQTT import dogGlobalMQTT
 
 current_dog_room_pet_number = None
 previous_dog_room_pet_number = None
-
-# Connect to MySQL database
-cloudDB = mysql.connector.connect(host="database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com",
-                                  user="smartpetcomfort", password="swinburneaaronsarawakidauniversityjacklin", database="petcomfort_db")
-cloudCursor = cloudDB.cursor(dictionary=True)
 
 localDB = mysql.connector.connect(
     host="localhost", user="pi", password="123456", database="petcomfort_db")
@@ -39,82 +35,11 @@ CREATE TABLE IF NOT EXISTS Dog_Raw_Data (
 )
 """)
 
-cloudCursor.execute("SET time_zone = '+08:00';")
-cloudCursor.execute("""
-CREATE TABLE IF NOT EXISTS Dog_Table (
-    dogTableID INT AUTO_INCREMENT PRIMARY KEY,
-    time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    petCount INT,
-    lightState BOOLEAN DEFAULT FALSE,
-    humidity FLOAT,
-    temperature_C FLOAT,
-    temperature_F FLOAT,
-    windowState BOOLEAN DEFAULT FALSE,
-    fanState BOOLEAN DEFAULT FALSE,
-    fanSpeed INT
-)
-""")
-
-
-# Adjust threshold
-cloudCursor.execute("""
-CREATE TABLE IF NOT EXIXTS Dog_Adjust_Table (
-    dogAdjustTableID INT AUTO_INCREMENT PRIMARY KEY,
-    fanTemp FLOAT,
-    dustWindow INT,
-    petLight INT,
-    irDistance INT
-)
-""")
-
-cloudCursor.execute("SELECT COUNT(*) FROM Dog_Adjust_Table")
-count = cloudCursor.fetchone()['COUNT(*)']
-if count == 0:
-    cloudCursor.execute(
-        f"INSERT INTO Dog_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (28, 500, 1, 10)")
-    cloudDB.commit()
-
-# Manual value
-cloudCursor.execute("""
-CREATE TABLE IF NOT EXISTS Dog_Control_Table (
-    dogControlID INT AUTO_INCREMENT PRIMARY KEY,
-    lightState BOOLEAN DEFAULT FALSE,
-    fanState BOOLEAN DEFAULT FALSE,
-    windowState BOOLEAN DEFAULT FALSE
-)
-""")
-                    
-cloudCursor.execute("SELECT COUNT(*) FROM Dog_Control_Table")
-count = cloudCursor.fetchone()['COUNT(*)']
-if count == 0:
-    cloudCursor.execute(
-        f"INSERT INTO Dog_Control_Table (lightState, fanState, windowState) VALUES (0, 0, 0)")
-    cloudDB.commit()
-
-cloudCursor.execute("""
-CREATE TABLE IF NOT EXISTS Dog_Dust_Table (
-    dogDustID INT AUTO_INCREMENT PRIMARY KEY,
-    dogTableId INT,
-    dustLevel FLOAT,
-    time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (dogTableId) REFERENCES Dog_Table(dogTableID)
-)
-""")
-
-cloudCursor.execute("""
-CREATE TABLE IF NOT EXISTS Mode_Table (
-    modeTableID INT AUTO_INCREMENT PRIMARY KEY,
-    control VARCHAR(20)
-)
-""")
-
-cloudCursor.execute("SELECT COUNT(*) FROM Mode_Table")
-count = cloudCursor.fetchone()['COUNT(*)']
-if count == 0:
-    cloudCursor.execute(f"INSERT INTO Mode_Table (control) VALUES ('false')")
-    cloudDB.commit()
-
 newInsertedID = None
+
+result_lock = threading.Lock()
+iface = SerialInterface()
+mqtt = dogGlobalMQTT()
 
 cache = {
     'control': None,
@@ -127,56 +52,91 @@ cache = {
     'window': None
 }
 
-result_lock = threading.Lock()
-iface = SerialInterface()
+camera = Picamera2()
+camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)}))
+camera.start()
 
 def fetch_data():
     print("Fetching data")
-    connection = pymysql.connect(host='database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com',
-                                 user='smartpetcomfort',
-                                 password='swinburneaaronsarawakidauniversityjacklin',
-                                 db='petcomfort_db',
-                                 cursorclass=pymysql.cursors.DictCursor)
-
     while True:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT Mode_Table.control, 
-                    Dog_Adjust_Table.fanTemp, Dog_Adjust_Table.dustWindow, Dog_Adjust_Table.petLight, Dog_Adjust_Table.irDistance, 
-                    Dog_Control_Table.* 
-                FROM Mode_Table 
-                LEFT JOIN Dog_Adjust_Table ON 1=1
-                LEFT JOIN Dog_Control_Table ON 1=1 
-                LIMIT 1
-            """)
-            raw_data = cursor.fetchone()
-            cache["control"] = raw_data["control"]
-            cache["fanTemp"] = raw_data["fanTemp"] 
-            cache["dustWindow"] = raw_data["dustWindow"]
-            cache["petLight"] = raw_data["petLight"]
-            cache["irDistance"] = raw_data["irDistance"]
-
-            cache["light"] = raw_data["lightState"]
-            cache["fan"] = raw_data["fanState"]
-            cache["window"] = raw_data["windowState"]
+        try:
+            result = mqtt.on_fetch()
             
-            data = {
-                    'control': 1 if cache['control'] == 'true' else 0,
+            if result:
+                cache["control"] = result.get("control")
+                cache["fanTemp"] = result.get("fanTemp")
+                cache["dustWindow"] = result.get("dustWindow")
+                cache["petLight"] = result.get("petLight")
+                cache["irDistance"] = result.get("irDistance")
+
+                cache["light"] = result.get("light")
+                cache["fan"] = result.get("fan")
+                cache["window"] = result.get("window")
+                
+                data = {
+                    'control': cache["control"],
                     'fanTemp': cache["fanTemp"],
                     'dustWindow': cache["dustWindow"],
                     'petLight': cache["petLight"],
                     'irDistance': cache["irDistance"],
-
                     'light': cache["light"],
                     'fan': cache["fan"],
                     'window': cache["window"],
-            }
-            #print("Data:", data)
-            
-            iface.write_msg(data)
-            connection.commit()
-            time.sleep(1)
+                }
 
+                print("Fetched data:", data)
+                
+                iface.write_msg(data)
+            else:
+                print("No data retrieved or error in fetching data")
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+    
+    time.sleep(1)
+    
+def take_image():
+    try:
+        # Connect to MySQL database
+        cloudDB = mysql.connector.connect(
+            host="database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com",
+            user="smartpetcomfort",
+            password="swinburneaaronsarawakidauniversityjacklin",
+            database="petcomfort_db"
+        )
+        cloudCursor = cloudDB.cursor(dictionary=True)
+
+        # Capture an image using the camera
+        print("Capturing image...")
+        frame = camera.capture_array()
+        _, buffer = cv2.imencode('.jpg', frame)
+        img_binary = buffer.tobytes()
+        print("Image captured successfully.")
+
+        # Update the image column in the database
+        update_image_query = "UPDATE Picam_Table SET image = %s WHERE piCamID = 1"
+        cloudCursor.execute(update_image_query, (img_binary,))
+        print("Image updated in database.")
+
+        # Set takePhoto_dog to FALSE in the database
+        update_takephoto_query = "UPDATE Picam_Table SET takePhoto_dog = FALSE WHERE piCamID = 1"
+        cloudCursor.execute(update_takephoto_query)
+        print("takePhoto_dog set to FALSE.")
+
+        cloudDB.commit()
+        print("Database commit successful.")
+
+        return {"message": "Image captured and stored in the database. takePhoto_dog set to FALSE."}
+    except mysql.connector.Error as db_err:
+        print("Database error occurred:", db_err)
+        return {"message": "Database error occurred."}
+    except Exception as e:
+        print("An error occurred:", e)
+        return {"message": "An error occurred."}
+
+    time.sleep(1)
+    
+    
 arduino_petCounter = None
 arduino_light = None
 arduino_humidity = None
@@ -228,34 +188,43 @@ def process_data():
         
         print(f"Response: {response}")
         assign_values(response)
-
+        
+        window_state = 1 if arduino_window else 0
+        fan_state = 1 if arduino_fan else 0
+        light_state = 1 if arduino_light else 0
+        
+        localCursor.execute("""INSERT INTO Dog_Raw_Data (petCount, humidity, lightState, temperature_C, temperature_F, fanState, fanSpeed, windowState, 
+                            dustLevel) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""", (arduino_petCounter, arduino_humidity, light_state, 
+                            arduino_temperature_C, arduino_temperature_F, fan_state, arduino_fanSpeed, window_state, arduino_dustValue))
+        
+        localDB.commit()
+        
         if arduino_petCounter is not None:
             if arduino_petCounter != previous_dog_room_pet_number:
                 previous_dog_room_pet_number = arduino_petCounter
 
                 if arduino_petCounter == 0:
-                    cloudCursor.execute("INSERT INTO Dog_Table (petCount, lightState, humidity, temperature_C, temperature_F, windowState, fanState, fanSpeed) VALUES (0, 0, 0, 0, 0, 0, 0, 0)")
-                    cloudDB.commit()
+
+                    mqtt.on_publish_table(0,0,0,0,0,0,0,0)
                 elif arduino_petCounter > 0:
-                    cloudCursor.execute(
-                        "INSERT INTO Dog_Table (petCount, lightState, humidity, temperature_C, temperature_F, windowState, fanState, fanSpeed) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
-                        (arduino_petCounter, arduino_light, arduino_humidity, arduino_temperature_C, arduino_temperature_F, arduino_window, arduino_fan, arduino_fanSpeed))
-                    newInsertedID = cloudCursor.lastrowid
-                    cloudCursor.execute(
-                        "INSERT INTO Dog_Dust_Table (dogTableId, dustLevel) VALUES (%s, %s)",
-                        (newInsertedID, arduino_dustValue))
-                    cloudDB.commit()
+                    
+                    mqtt.on_publish_table(arduino_petCounter, light_state, arduino_humidity, arduino_temperature_C, arduino_temperature_F, window_state, fan_state, arduino_fanSpeed)
+                    
+                    mqtt.on_publish_dust(arduino_dustValue)
 
             elif arduino_petCounter > 0 and arduino_petCounter == previous_dog_room_pet_number:
                 print("Inserting dust level")
-#                 cloudCursor.execute(
-#                     "INSERT INTO Cat_Dust_Table (catTableId, dustLevel) VALUES (%s, %s)",
-#                     (newInsertedID, arduino_dustValue))
-#                 cloudDB.commit()
-
-        
-
+                #mqtt.on_publish_dust(arduino_dustValue)
+                #time.sleep(3)
+                
+                
+                
 thread = threading.Thread(target=process_data)
 thread.start()
 second_thread = threading.Thread(target=fetch_data)
 second_thread.start()
+third_thread = threading.Thread(target=take_image)
+third_thread.start()
+
+
+

@@ -3,6 +3,8 @@
     <head>
         <title>Dog Room</title>
 		<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}" />
+		<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.0.0"></script>
     </head>
     <body>
         <div class="container2">
@@ -12,12 +14,12 @@
 			<!-- pass the last_petCount here -->
 			<h2 class="subtitle">Total pet inside: {{ last_petCount }}</h2>
             <div class="button-container">
-                <button id="openModalBtn" class="btn">Live Streaming</button>
+                <button id="openModalBtn" class="btn" onclick="getAndShowImage()">View Room</button>
             </div>
             <div id="chartModal" class="modal">
 				<div class="modal-content">
-					<span class="close">&times;</span>
-					<iframe id="liveStream" src="" frameborder="0" allowfullscreen></iframe>				
+					<span id="close" class="close">&times;</span>
+					<img id="capturedImage" src="" alt="Picam Image" />				
 				</div>
 			</div>
 
@@ -54,38 +56,154 @@
 					<div class="data-value">{% if row["windowState"] == 0 %} OFF {% else %} ON {% endif %}</div>
                 </div>
                 <div class="data-row">
-                    <div class="data-label">Dust Level:</div>
-                    <img src="{{ url_for('static', filename='dogRoom/chart/chart_' + row['dogTableID']|string + '.png') }}" alt="Chart Image" />
+                    <canvas id="chart_{{ row['dogTableID'] }}"></canvas>
                 </div>
             </div>
             {% endfor %}
         </div>
 
-        <script>
-			// JavaScript to handle modal functionality
+		<script>
 			var modal = document.getElementById("chartModal");
 			var btn = document.getElementById("openModalBtn");
-			var span = document.getElementsByClassName("close")[0];
-
-			btn.onclick = function () {
-				var iframe = document.getElementById("liveStream");
-				iframe.src = "/video_feed"; 
-				modal.style.display = "block";
-			};
-
-			span.onclick = function () {
+			var span = document.getElementById("close");
+	
+			function getAndShowImage() {
+				fetch("/camera_dog_feed")
+					.then(response => {
+						if (response.ok) {
+							return response.blob();
+						} else {
+							throw new Error("Failed to fetch image.");
+						}
+					})
+					.then(blob => {
+						var img = document.getElementById("capturedImage");
+						img.src = URL.createObjectURL(blob);
+						modal.style.display = "block";
+					})
+					.catch(error => {
+						console.error("Error:", error);
+						alert("Error fetching image: " + error.message);
+					});
+			}
+	
+			span.onclick = function() {
 				modal.style.display = "none";
-				var iframe = document.getElementById("liveStream");
-				iframe.src = ""; 
-			};
-
-			window.onclick = function (event) {
+				var img = document.getElementById("capturedImage");
+				URL.revokeObjectURL(img.src);
+				img.src = "";
+			}
+	
+			window.onclick = function(event) {
 				if (event.target == modal) {
 					modal.style.display = "none";
-					var iframe = document.getElementById("liveStream");
-					iframe.src = ""; 
+					var img = document.getElementById("capturedImage");
+					URL.revokeObjectURL(img.src);
+					img.src = "";
 				}
-			};
+			}
+		</script>
+
+		<script>
+			function calculateStatistics(dustLevels) {
+				const min = Math.min(...dustLevels);
+				const max = Math.max(...dustLevels);
+				const avg = dustLevels.reduce((a, b) => a + b, 0) / dustLevels.length;
+				return { min, max, avg };
+			}
+
+			var data = {{ data | tojson() }};
+			data.forEach(function(dog) {
+				var ctx = document.getElementById('chart_' + dog.dogTableID).getContext('2d');
+				const stats = calculateStatistics(dog.dust_levels);
+				const minIndex = dog.dust_levels.indexOf(stats.min);
+				const maxIndex = dog.dust_levels.indexOf(stats.max);
+
+				new Chart(ctx, {
+					type: 'line',
+					data: {
+						labels: Array.from({length: dog.dust_levels.length}, (_, i) => i + 1),
+						datasets: [
+							{
+								label: 'Dust Levels',
+								data: dog.dust_levels,
+								borderColor: 'rgba(75, 192, 192, 1)',
+								borderWidth: 1,
+								fill: false,
+								pointBackgroundColor: dog.dust_levels.map((value, index) => {
+									if (index === minIndex) return 'rgba(255, 99, 132, 1)';
+									if (index === maxIndex) return 'rgba(0, 128, 0, 1)';
+									return 'rgba(75, 192, 192, 1)';
+								})
+							},
+							{
+								label: 'Min Dust Level',
+								data: dog.dust_levels.map((value, index) => (index === minIndex ? value : null)),
+								borderColor: 'rgba(255, 99, 132, 1)',
+								borderWidth: 1,
+								pointBackgroundColor: 'rgba(255, 99, 132, 1)',
+								pointRadius: dog.dust_levels.map((value, index) => (index === minIndex ? 5 : 0)),
+								fill: false,
+								showLine: false
+							},
+							{
+								label: 'Max Dust Level',
+								data: dog.dust_levels.map((value, index) => (index === maxIndex ? value : null)),
+								borderColor: 'rgba(0, 128, 0, 1)',
+								borderWidth: 1,
+								pointBackgroundColor: 'rgba(0, 128, 0, 1)',
+								pointRadius: dog.dust_levels.map((value, index) => (index === maxIndex ? 5 : 0)),
+								fill: false,
+								showLine: false
+							},
+							{
+								label: 'Avg Dust Level',
+								data: Array(dog.dust_levels.length).fill(stats.avg),
+								borderColor: 'rgba(255, 206, 86, 1)',
+								borderWidth: 1,
+								borderDash: [10, 5],
+								fill: false
+							}
+						]
+					},
+					options: {
+					plugins: {
+					datalabels: {
+						display: true,
+						color: "black",
+					},
+					title: {
+					display: true,
+					text: 'Dust Level Readings',
+					font: {
+                        size: 30,
+                    }
+				}
+			},
+					scales: {
+					x: {
+						title: {
+						display: true,
+						text: "Reading",
+						},
+					},
+					y: {
+						title: {
+						display: true,
+						text: "Dust Level", // Adjusted text
+						},
+					},
+					yAxes: [
+						{
+						ticks: {
+							beginAtZero: true,
+						},
+						},
+					],
+					},
+				},
+				});
+			});
 		</script>
     </body>
 </html>

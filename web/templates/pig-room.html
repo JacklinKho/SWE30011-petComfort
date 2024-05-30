@@ -1,95 +1,207 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>Pig Room</title>
-		<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}" />
-    </head>
-    <body>
-        <div class="container2">
-            <img
-                src="../static/images/pig2.png" alt="Pig Room" class="title-background" />
-            <h1 class="title">Pig Room</h1>
-			<!-- pass the last_petCount here -->
-			<h2 class="subtitle">Total pet inside: {{ last_petCount }}</h2>
-            <div class="button-container">
-                <button id="openModalBtn" class="btn" onclick="captureImage()">View Room</button>
+<head>
+    <title>Pig Room</title>
+    <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='style.css') }}" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container2">
+        <img src="../static/images/pig2.png" alt="Pig Room" class="title-background" />
+        <h1 class="title">Pig Room</h1>
+        <!-- pass the last_petCount here -->
+        <h2 class="subtitle">Total pet inside: {{ last_petCount }}</h2>
+        <div class="button-container">
+            <button id="openModalBtn" class="btn" onclick="getAndShowImage()">View Room</button>
+        </div>
+        <div id="chartModal" class="modal">
+            <div class="modal-content">
+				<span id="close" class="close">&times;</span>
+                <img id="capturedImage" src="" alt="Picam Image" />
             </div>
-            <div id="chartModal" class="modal">
-				<div class="modal-content">
-					<span class="close">&times;</span>
-					<img id="capturedImage" src="" alt="Picam Image" />				
-				</div>
-			</div>
-
-            {% for row in data %}
-            <div class="data-container">
-                <div class="data-row">
-					<div class="data-label">Date:</div>
-					<div class="data-value">{{ row["time"].strftime('%Y-%m-%d') }}</div>
-				</div>
-				<div class="data-row">
-					<div class="data-label">Time:</div>
-					<div class="data-value">{{ row["time"].strftime('%H:%M:%S') }}</div>
-				</div>
-                <div class="data-row">
-                    <div class="data-label">Humidity:</div>
-                    <div class="data-value">{{ row["humidity"] }}</div>
-                </div>
-                <div class="data-row">
-                    <div class="data-label">Temperature:</div>
-                    <div class="data-value"> {{ row["temperature_C"] }}Â°C / {{ row["temperature_F"] }}Â°F </div>
-                </div>
-                <div class="data-row">
-                    <div class="data-label">Light:</div>
-                    <div class="data-value">{% if row["lightState"] == 0 %} OFF {% else %} ON {% endif %}</div>
-                </div>
-                <div class="data-row">
-					<div class="data-label">Fan:</div>
-					<div class="data-value">{% if row["fanState"] == 0 %} OFF {% else %} ON {% endif %}</div>
-					<div class="data-label data-label-fan-speed">Fan Speed:</div>
-					<div class="data-value">{{ row["fanSpeed"] }}</div>
-				</div>
-                <div class="data-row">
-					<div class="data-label">Window:</div>
-					<div class="data-value">{% if row["windowState"] == 0 %} OFF {% else %} ON {% endif %}</div>
-				</div>
-                <div class="data-row">
-					<div class="data-label">Dust Level:</div>
-					<img src="{{ url_for('static', filename='pigRoom/chart/chart_' + row['pigTableID']|string + '.png') }}" alt="Chart Image" />
-				</div>
-            </div>
-            {% endfor %}
         </div>
 
-        <script>
-			// JavaScript to handle modal functionality
-			var modal = document.getElementById("chartModal");
-			var btn = document.getElementById("openModalBtn");
-			var span = document.getElementsByClassName("close")[0];
+        {% for row in data %}
+        <div class="data-container">
+            <div class="data-row">
+                <div class="data-label">Date:</div>
+                <div class="data-value">{{ row["time"].strftime('%Y-%m-%d') }}</div>
+            </div>
+            <div class="data-row">
+                <div class="data-label">Time:</div>
+                <div class="data-value">{{ row["time"].strftime('%H:%M:%S') }}</div>
+            </div>
+            <div class="data-row">
+                <div class="data-label">Humidity:</div>
+                <div class="data-value">{{ row["humidity"] }}</div>
+            </div>
+            <div class="data-row">
+                <div class="data-label">Temperature:</div>
+                <div class="data-value">{{ row["temperature_C"] }}°C / {{ row["temperature_F"] }}°F </div>
+            </div>
+            <div class="data-row">
+                <div class="data-label">Light:</div>
+                <div class="data-value">{% if row["lightState"] == 0 %} OFF {% else %} ON {% endif %}</div>
+            </div>
+            <div class="data-row">
+                <div class="data-label">Fan:</div>
+                <div class="data-value">{% if row["fanState"] == 0 %} OFF {% else %} ON {% endif %}</div>
+                <div class="data-label data-label-fan-speed">Fan Speed:</div>
+                <div class="data-value">{{ row["fanSpeed"] }}</div>
+            </div>
+            <div class="data-row">
+                <div class="data-label">Window:</div>
+                <div class="data-value">{% if row["windowState"] == 0 %} OFF {% else %} ON {% endif %}</div>
+            </div>
+            <div class="data-row">
+                <canvas id="chart_{{ row['pigTableID'] }}"></canvas>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
 
-			btn.onclick = function() {
-				modal.style.display = "block";
-			}
+	<script>
+        var modal = document.getElementById("chartModal");
+        var btn = document.getElementById("openModalBtn");
+        var span = document.getElementById("close");
 
-			span.onclick = function() {
-				modal.style.display = "none";
-			}
+        function getAndShowImage() {
+            fetch("/camera_pig_feed")
+                .then(response => {
+                    if (response.ok) {
+                        return response.blob();
+                    } else {
+                        throw new Error("Failed to fetch image.");
+                    }
+                })
+                .then(blob => {
+                    var img = document.getElementById("capturedImage");
+                    img.src = URL.createObjectURL(blob);
+                    modal.style.display = "block";
+                })
+                .catch(error => {
+                    console.error("Error:", error);
+                    alert("Error fetching image: " + error.message);
+                });
+        }
 
-			window.onclick = function(event) {
-				if (event.target == modal) {
-					modal.style.display = "none";
-				}
-			}
+        span.onclick = function() {
+            modal.style.display = "none";
+            var img = document.getElementById("capturedImage");
+            URL.revokeObjectURL(img.src);
+            img.src = "";
+        }
 
-			function captureImage() {
-				fetch('/capture-pig-image')
-					.then(response => response.json())
-					.then(data => {
-						img.src = data.image_path;
-						modal.style.display = "block";
-					})
-					.catch(error => console.error('Error:', error));
-        	}
-		</script>
-    </body>
+        window.onclick = function(event) {
+            if (event.target == modal) {
+                modal.style.display = "none";
+                var img = document.getElementById("capturedImage");
+                URL.revokeObjectURL(img.src);
+                img.src = "";
+            }
+        }
+    </script>
+
+    <script>
+        function calculateStatistics(dustLevels) {
+            const min = Math.min(...dustLevels);
+            const max = Math.max(...dustLevels);
+            const avg = dustLevels.reduce((a, b) => a + b, 0) / dustLevels.length;
+            return { min, max, avg };
+        }
+
+        var data = {{ data | tojson() }};
+        data.forEach(function(pig) {
+            var ctx = document.getElementById('chart_' + pig.pigTableID).getContext('2d');
+            const stats = calculateStatistics(pig.dust_levels);
+            const minIndex = pig.dust_levels.indexOf(stats.min);
+            const maxIndex = pig.dust_levels.indexOf(stats.max);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({ length: pig.dust_levels.length }, (_, i) => i + 1),
+                    datasets: [
+                        {
+                            label: 'Dust Levels',
+                            data: pig.dust_levels,
+                            borderColor: 'rgba(75, 192, 192, 1)',
+                            borderWidth: 1,
+                            fill: false,
+                            pointBackgroundColor: pig.dust_levels.map((value, index) => {
+                                if (index === minIndex) return 'rgba(255, 99, 132, 1)';
+                                if (index === maxIndex) return 'rgba(0, 128, 0, 1)';
+                                return 'rgba(75, 192, 192, 1)';
+                            })
+                        },
+                        {
+                            label: 'Min Dust Level',
+                            data: pig.dust_levels.map((value, index) => (index === minIndex ? value : null)),
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            borderWidth: 1,
+                            pointBackgroundColor: 'rgba(255, 99, 132, 1)',
+                            pointRadius: pig.dust_levels.map((value, index) => (index === minIndex ? 5 : 0)),
+                            fill: false,
+                            showLine: false
+                        },
+                        {
+                            label: 'Max Dust Level',
+                            data: pig.dust_levels.map((value, index) => (index === maxIndex ? value : null)),
+                            borderColor: 'rgba(0, 128, 0, 1)',
+                            borderWidth: 1,
+                            pointBackgroundColor: 'rgba(0, 128, 0, 1)',
+                            pointRadius: pig.dust_levels.map((value, index) => (index === maxIndex ? 5 : 0)),
+                            fill: false,
+                            showLine: false
+                        },
+                        {
+                            label: 'Avg Dust Level',
+                            data: Array(pig.dust_levels.length).fill(stats.avg),
+                            borderColor: 'rgba(255, 206, 86, 1)',
+                            borderWidth: 1,
+                            borderDash: [10, 5],
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    plugins: {
+                        datalabels: {
+                            display: true,
+                            color: "black",
+                        },
+                        title: {
+							display: true,
+							text: 'Dust Level Readings',
+							font: {
+								size: 30,
+							}
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: "Reading",
+                            },
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: "Dust Level",
+                            },
+                        },
+                        yAxes: [
+                            {
+                                ticks: {
+                                    beginAtZero: true,
+                                },
+                            },
+                        ],
+                    },
+                },
+            });
+        });
+    </script>
+</body>
 </html>

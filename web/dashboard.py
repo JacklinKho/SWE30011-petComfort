@@ -1,12 +1,15 @@
 import mysql.connector
 import json
+import time
+import threading
 from datetime import timedelta
-from flask import Flask, request, render_template, redirect, url_for, session, current_app, Response
+from flask import Flask, request, render_template, redirect, url_for, session, current_app, Response, send_file, jsonify
 import os
 import matplotlib
+import io
 import matplotlib.pyplot as plt
 import numpy as np
-from picamera2 import Picamera2
+# from picamera2 import Picamera2
 import cv2
 import re
 import requests
@@ -28,6 +31,231 @@ logging.basicConfig(level=logging.DEBUG, filename='app.log', filemode='a',
 # Connect to MySQL database
 mydb = mysql.connector.connect(host="database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com",
                                user="smartpetcomfort", password="swinburneaaronsarawakidauniversityjacklin", database="petcomfort_db")
+
+cloudCursor = mydb.cursor(dictionary=True)
+
+cloudCursor.execute("SET time_zone = '+08:00';")
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Dog_Table (
+    dogTableID INT AUTO_INCREMENT PRIMARY KEY,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    petCount INT,
+    lightState BOOLEAN DEFAULT FALSE,
+    humidity FLOAT,
+    temperature_C FLOAT,
+    temperature_F FLOAT,
+    windowState BOOLEAN DEFAULT FALSE,
+    fanState BOOLEAN DEFAULT FALSE,
+    fanSpeed INT
+)
+""")
+
+
+# Adjust threshold
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Dog_Adjust_Table (
+    dogAdjustTableID INT AUTO_INCREMENT PRIMARY KEY,
+    fanTemp FLOAT,
+    dustWindow INT,
+    petLight INT,
+    irDistance INT
+)
+""")
+
+cloudCursor.execute("SELECT COUNT(*) FROM Dog_Adjust_Table")
+count = cloudCursor.fetchone()['COUNT(*)']
+if count == 0:
+    cloudCursor.execute(
+        f"INSERT INTO Dog_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (28, 500, 1, 10)")
+    mydb.commit()
+
+# Manual value
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Dog_Control_Table (
+    dogControlID INT AUTO_INCREMENT PRIMARY KEY,
+    lightState BOOLEAN DEFAULT FALSE,
+    fanState BOOLEAN DEFAULT FALSE,
+    windowState BOOLEAN DEFAULT FALSE
+)
+""")
+                    
+cloudCursor.execute("SELECT COUNT(*) FROM Dog_Control_Table")
+count = cloudCursor.fetchone()['COUNT(*)']
+if count == 0:
+    cloudCursor.execute(
+        f"INSERT INTO Dog_Control_Table (lightState, fanState, windowState) VALUES (0, 0, 0)")
+    mydb.commit()
+
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Dog_Dust_Table (
+    dogDustID INT AUTO_INCREMENT PRIMARY KEY,
+    dogTableId INT,
+    dustLevel FLOAT,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (dogTableId) REFERENCES Dog_Table(dogTableID)
+)
+""")
+
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Mode_Table (
+    modeTableID INT AUTO_INCREMENT PRIMARY KEY,
+    control VARCHAR(20)
+)
+""")
+
+cloudCursor.execute("SELECT COUNT(*) FROM Mode_Table")
+count = cloudCursor.fetchone()['COUNT(*)']
+if count == 0:
+    cloudCursor.execute(f"INSERT INTO Mode_Table (control) VALUES ('false')")
+    mydb.commit()
+    
+
+cloudCursor.execute("SET time_zone = '+08:00';")
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Cat_Table (
+    catTableID INT AUTO_INCREMENT PRIMARY KEY,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    petCount INT, 
+    lightState BOOLEAN DEFAULT FALSE,
+    humidity FLOAT,
+    temperature_C FLOAT,
+    temperature_F FLOAT,
+    windowState BOOLEAN DEFAULT FALSE,
+    fanState BOOLEAN DEFAULT FALSE,
+    fanSpeed INT
+)
+""")
+
+# Adjust threshold
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Cat_Adjust_Table (
+    catAdjustTableID INT AUTO_INCREMENT PRIMARY KEY,
+    fanTemp FLOAT,
+    dustWindow INT,
+    petLight INT,
+    irDistance INT
+)
+""")
+
+cloudCursor.execute("SELECT COUNT(*) FROM Cat_Adjust_Table")
+count = cloudCursor.fetchone()['COUNT(*)']
+if count == 0:
+    cloudCursor.execute(
+        f"INSERT INTO Cat_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (28, 500, 1, 10)")
+    mydb.commit()
+
+# Manual value
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Cat_Control_Table (
+    catControlID INT AUTO_INCREMENT PRIMARY KEY,
+    lightState BOOLEAN DEFAULT FALSE,
+    fanState BOOLEAN DEFAULT FALSE,
+    windowState BOOLEAN DEFAULT FALSE
+)
+""")
+
+cloudCursor.execute("SELECT COUNT(*) FROM Cat_Control_Table")
+count = cloudCursor.fetchone()['COUNT(*)']
+if count == 0:
+    cloudCursor.execute(
+        f"INSERT INTO Cat_Control_Table (lightState, fanState, windowState) VALUES (0, 0, 0)")
+    mydb.commit()
+
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Cat_Dust_Table (
+    catDustID INT AUTO_INCREMENT PRIMARY KEY,
+    catTableId INT,
+    dustLevel FLOAT,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (catTableId) REFERENCES Cat_Table(catTableID)
+)
+""")
+
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Mode_Table (
+    modeTableID INT AUTO_INCREMENT PRIMARY KEY,
+    control VARCHAR(20)
+)
+""")
+
+
+cloudCursor.execute("SET time_zone = '+08:00';")
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Pig_Table (
+    pigTableID INT AUTO_INCREMENT PRIMARY KEY,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    petCount INT,
+    lightState BOOLEAN DEFAULT FALSE,
+    humidity FLOAT,
+    temperature_C FLOAT,
+    temperature_F FLOAT,
+    windowState BOOLEAN DEFAULT FALSE,
+    fanState BOOLEAN DEFAULT FALSE,
+    fanSpeed INT
+)
+""")
+
+# Adjust threshold
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Pig_Adjust_Table (
+    pigAdjustTableID INT AUTO_INCREMENT PRIMARY KEY,
+    fanTemp FLOAT,
+    dustWindow INT,
+    petLight INT,
+    irDistance INT
+)
+""")
+
+cloudCursor.execute("SELECT COUNT(*) FROM Pig_Adjust_Table")
+count = cloudCursor.fetchone()['COUNT(*)']
+if count == 0:
+    cloudCursor.execute(
+        f"INSERT INTO Pig_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (28, 500, 1, 10)")
+    mydb.commit()
+
+# Manual value
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Pig_Control_Table (
+    pigControlID INT AUTO_INCREMENT PRIMARY KEY,
+    lightState BOOLEAN DEFAULT FALSE,
+    fanState BOOLEAN DEFAULT FALSE,
+    windowState BOOLEAN DEFAULT FALSE
+)
+""")
+
+cloudCursor.execute("SELECT COUNT(*) FROM Pig_Control_Table")
+count = cloudCursor.fetchone()['COUNT(*)']
+if count == 0:
+    cloudCursor.execute(
+        f"INSERT INTO Pig_Control_Table (lightState, fanState, windowState) VALUES (0, 0, 0)")
+    mydb.commit()
+
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Pig_Dust_Table (
+    pigDustID INT AUTO_INCREMENT PRIMARY KEY,
+    pigTableId INT,
+    dustLevel FLOAT,
+    time DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (pigTableId) REFERENCES Pig_Table(pigTableID)
+)
+""")
+
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Mode_Table (
+    modeTableID INT AUTO_INCREMENT PRIMARY KEY,
+    control VARCHAR(20)
+)
+""")
+
+cloudCursor.execute("""
+CREATE TABLE IF NOT EXISTS Picam_Table (
+    piCamID INT AUTO_INCREMENT PRIMARY KEY,
+    image MEDIUMBLOB NULL,
+    takePhoto_dog BOOLEAN,
+    takePhoto_cat BOOLEAN,
+    takePhoto_pig BOOLEAN
+)
+""")
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -165,7 +393,6 @@ def update_mode_table(control):
         cursor.execute(sql, (control,))
         mydb.commit()
         
-       
 @app.route('/globalAdjust', methods=['POST'])
 def globalAdjust():
     if request.method == 'POST':
@@ -174,43 +401,71 @@ def globalAdjust():
         dustWindow = request.form['dustWindow']
         petLight = request.form['petLight']
         irDistance = request.form['irDistance']
-        
-        # Create a dictionary to hold the states
-        data = {
-            "fanTemp": fanTemp,
-            "dustWindow": dustWindow,
-            "petLight": petLight,
-            "irDistance": irDistance,
-        }
 
-        # Convert the dictionary to JSON format
-        payload = json.dumps(data)
-        
-        # AWS IoT certificate based connection
-        myMQTTClient = AWSIoTMQTTClient("MyCloudComputer")
-        myMQTTClient.configureEndpoint("aadckvyc4ktri-ats.iot.us-east-1.amazonaws.com", 8883)
-        myMQTTClient.configureCredentials("/home/ubuntu/swe30011/cert/AmazonRootCA1.pem", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-private.pem.key", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-certificate.pem.crt")
-        myMQTTClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
-        myMQTTClient.configureDrainingFrequency(2)  # Draining: 2 Hz
-        myMQTTClient.configureConnectDisconnectTimeout(10)  # 10 sec
-        myMQTTClient.configureMQTTOperationTimeout(5)  # 5 sec
+        # Connect to MySQL and execute INSERT or UPDATE query
+        with mydb.cursor() as cursor:
+            # Check if a record already exists in the table
+            cursor.execute("SELECT * FROM Cat_Adjust_Table")
+            existing_record = cursor.fetchone()
 
-        # Connect to AWS IoT
-        myMQTTClient.connect()
+            if existing_record:
+                # Update existing record
+                sql = "UPDATE Cat_Adjust_Table SET fanTemp=%s, dustWindow=%s, petLight=%s, irDistance=%s"
+                val = (fanTemp, dustWindow, petLight, irDistance)
+            else:
+                # Insert new record
+                sql = "INSERT INTO Cat_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (%s, %s, %s, %s)"
+                val = (fanTemp, dustWindow, petLight, irDistance)
 
-        # Publish the JSON payload to a topic
-        myMQTTClient.publish("home/devices/threshold", payload, 0)
+            cursor.execute(sql, val)
+            mydb.commit()
+            
+        # Connect to MySQL and execute INSERT or UPDATE query
+        with mydb.cursor() as cursor:
+            # Check if a record already exists in the table
+            cursor.execute("SELECT * FROM Dog_Adjust_Table")
+            existing_record = cursor.fetchone()
 
-        # Disconnect from AWS IoT
-        myMQTTClient.disconnect()
+            if existing_record:
+                # Update existing record
+                sql = "UPDATE Dog_Adjust_Table SET fanTemp=%s, dustWindow=%s, petLight=%s, irDistance=%s"
+                val = (fanTemp, dustWindow, petLight, irDistance)
+            else:
+                # Insert new record
+                sql = "INSERT INTO Dog_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (%s, %s, %s, %s)"
+                val = (fanTemp, dustWindow, petLight, irDistance)
 
+            cursor.execute(sql, val)
+            mydb.commit()
+
+        # Connect to MySQL and execute INSERT or UPDATE query
+        with mydb.cursor() as cursor:
+            # Check if a record already exists in the table
+            cursor.execute("SELECT * FROM Pig_Adjust_Table")
+            existing_record = cursor.fetchone()
+
+            if existing_record:
+                # Update existing record
+                sql = "UPDATE Pig_Adjust_Table SET fanTemp=%s, dustWindow=%s, petLight=%s, irDistance=%s"
+                val = (fanTemp, dustWindow, petLight, irDistance)
+            else:
+                # Insert new record
+                sql = "INSERT INTO Pig_Adjust_Table (fanTemp, dustWindow, petLight, irDistance) VALUES (%s, %s, %s, %s)"
+                val = (fanTemp, dustWindow, petLight, irDistance)
+
+            cursor.execute(sql, val)
+            mydb.commit()
+            
         # Redirect to a success page or render a success message
         return render_template('global.html')
+
 
 @app.route('/catAdjust', methods=['POST'])
 def catAdjust():
     cat_adjust_data = None
     cat_control_data = None
+    dog_adjust_data = None
+    dog_control_data = None
     pig_adjust_data = None
     pig_control_data = None
     if request.method == 'POST':
@@ -397,33 +652,48 @@ def globalControl():
     fanState = request.form.get('fan') == 'true'
     windowState = request.form.get('window') == 'true'
 
-    # Create a dictionary to hold the states
-    data = {
-        "lightState": lightState,
-        "fanState": fanState,
-        "windowState": windowState
-    }
+    with mydb.cursor() as cursor:
+        # Check if a record already exists in the table
+        cursor.execute("SELECT * FROM Dog_Control_Table LIMIT 1")
+        existing_record = cursor.fetchone()
 
-    # Convert the dictionary to JSON format
-    payload = json.dumps(data)
+        if existing_record:
+            # Construct the SQL query to update only the changed fields
+            cursor.execute(
+                f"UPDATE Dog_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE dogControlID = 1")
+        else:
+            # Insert new record if no existing record found
+            sql = "INSERT INTO Dog_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (lightState, fanState, windowState))
 
-    # AWS IoT certificate based connection
-    myMQTTClient = AWSIoTMQTTClient("MyCloudComputer")
-    myMQTTClient.configureEndpoint("aadckvyc4ktri-ats.iot.us-east-1.amazonaws.com", 8883)
-    myMQTTClient.configureCredentials("/home/ubuntu/swe30011/cert/AmazonRootCA1.pem", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-private.pem.key", "/home/ubuntu/swe30011/cert/1428cadeec4a4d8b8b7376dd5ffb9ddf1045e3ba425f7548d89794156cb07ca5-certificate.pem.crt")
-    myMQTTClient.configureOfflinePublishQueueing(-1)  # Infinite offline Publish queueing
-    myMQTTClient.configureDrainingFrequency(2)  # Draining: 2 Hz
-    myMQTTClient.configureConnectDisconnectTimeout(10)  # 10 sec
-    myMQTTClient.configureMQTTOperationTimeout(5)  # 5 sec
+        # Repeat the same process for other tables
+        # Cat Control Table
+        cursor.execute("SELECT * FROM Cat_Control_Table LIMIT 1")
+        existing_record = cursor.fetchone()
 
-    # Connect to AWS IoT
-    myMQTTClient.connect()
+        if existing_record:
+            cursor.execute(
+                f"UPDATE Cat_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE catControlID = 1")
+        else:
+            sql = "INSERT INTO Cat_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (lightState, fanState, windowState))
 
-    # Publish the JSON payload to a topic
-    myMQTTClient.publish("home/devices/state", payload, 0)
+        # Pig Control Table
+        cursor.execute("SELECT * FROM Pig_Control_Table LIMIT 1")
+        existing_record = cursor.fetchone()
 
-    # Disconnect from AWS IoT
-    myMQTTClient.disconnect() 
+        if existing_record:
+            cursor.execute(
+                f"UPDATE Pig_Control_Table SET lightState = {lightState}, fanState = {fanState}, windowState = {windowState} WHERE pigControlID = 1")
+        else:
+            sql = "INSERT INTO Pig_Control_Table (lightState, fanState, windowState) VALUES (%s, %s, %s)"
+            cursor.execute(sql, (lightState, fanState, windowState))
+
+    # Commit all changes after executing all SQL statements
+    mydb.commit()
+    
+    return "Data stored successfully"
+    
     
 @app.route('/catControl', methods=['POST'])
 def catControl():
@@ -517,7 +787,6 @@ def mainRoom():
     
     return render_template('global.html')
 
-# Define route to render catRoom page
 @app.route('/cat-room')
 def catRoom():
     cursor = mydb.cursor(dictionary=True)
@@ -542,51 +811,12 @@ def catRoom():
     cursor.close()
 
     cats_list = list(cats.values())
-    # print(cats_list)
 
     cursor2 = mydb.cursor(dictionary=True)
     cursor2.execute("SELECT * FROM Cat_Table ORDER BY catTableID DESC LIMIT 1")
     last_row = cursor2.fetchone()
     last_petCount = last_row['petCount']
     cursor2.close()
-
-    try:
-        for cat in cats_list:
-            dust_levels_list = cat['dust_levels']
-            # print(dust_levels_list)
-            if dust_levels_list.__len__() > 0:
-                plt.plot(np.arange(1, len(dust_levels_list) + 1),
-                         dust_levels_list)
-                plt.xlabel('Reading')
-                plt.ylabel('Dust Levels')
-                plt.title('Dust Level Readings')
-                plt.grid(True)
-
-                # Highlight min, max, and average values
-                min_value = min(dust_levels_list)
-                max_value = max(dust_levels_list)
-                avg_value = sum(dust_levels_list) / len(dust_levels_list)
-
-                plt.scatter(dust_levels_list.index(min_value) +
-                            1, min_value, color='r', label='Min')
-                plt.scatter(dust_levels_list.index(max_value) +
-                            1, max_value, color='g', label='Max')
-
-                plt.text(dust_levels_list.index(min_value) + 1, min_value,
-                         f'Min: {min_value}', verticalalignment='bottom', horizontalalignment='right', color='r')
-                plt.text(dust_levels_list.index(max_value) + 1, max_value,
-                         f'Max: {max_value}', verticalalignment='bottom', horizontalalignment='right', color='g')
-
-                plt.axhline(y=avg_value, color='orange', linestyle='--',
-                            label=f'Average: {avg_value}')
-                plt.text(len(dust_levels_list), avg_value, f'Avg: {avg_value}', color='orange',
-                         verticalalignment='bottom', horizontalalignment='right')
-
-                chart_filename = f"static/catRoom/chart/chart_{cat['catTableID']}.png"
-                plt.savefig(chart_filename)
-                plt.close()
-    except Exception as e:
-        print("Error:", e)
 
     return render_template('cat-room.html', data=cats_list, last_petCount=last_petCount)
 
@@ -615,53 +845,15 @@ def dogRoom():
     cursor.close()
 
     dogs_list = list(dogs.values())
-    # print(dogs_list)
 
     cursor2 = mydb.cursor(dictionary=True)
     cursor2.execute("SELECT * FROM Dog_Table ORDER BY dogTableID DESC LIMIT 1")
     last_row = cursor2.fetchone()
     last_petCount = last_row['petCount']
-    cursor2.close()  
-
-    try:
-        for dog in dogs_list:
-            dust_levels_list = dog['dust_levels']
-            # print(dust_levels_list)
-            if dust_levels_list.__len__() > 0:
-                plt.plot(np.arange(1, len(dust_levels_list) + 1),
-                         dust_levels_list)
-                plt.xlabel('Reading')
-                plt.ylabel('Dust Levels')
-                plt.title('Dust Level Readings')
-                plt.grid(True)
-
-                # Highlight min, max, and average values
-                min_value = min(dust_levels_list)
-                max_value = max(dust_levels_list)
-                avg_value = sum(dust_levels_list) / len(dust_levels_list)
-
-                plt.scatter(dust_levels_list.index(min_value) +
-                            1, min_value, color='r', label='Min')
-                plt.scatter(dust_levels_list.index(max_value) +
-                            1, max_value, color='g', label='Max')
-
-                plt.text(dust_levels_list.index(min_value) + 1, min_value,
-                         f'Min: {min_value}', verticalalignment='bottom', horizontalalignment='right', color='r')
-                plt.text(dust_levels_list.index(max_value) + 1, max_value,
-                         f'Max: {max_value}', verticalalignment='bottom', horizontalalignment='right', color='g')
-
-                plt.axhline(y=avg_value, color='orange', linestyle='--',
-                            label=f'Average: {avg_value}')
-                plt.text(len(dust_levels_list), avg_value, f'Avg: {avg_value}', color='orange',
-                         verticalalignment='bottom', horizontalalignment='right')
-                
-                chart_filename = f"static/dogRoom/chart/chart_{dog['dogTableID']}.png"
-                plt.savefig(chart_filename)
-                plt.close()
-    except Exception as e:
-        print("Error:", e)
+    cursor2.close()
 
     return render_template('dog-room.html', data=dogs_list, last_petCount=last_petCount)
+
 
 # Define route to render pigRoom page
 @app.route('/pig-room')
@@ -688,72 +880,155 @@ def pigRoom():
     cursor.close()
 
     pigs_list = list(pigs.values())
-    # print(pigs_list)
 
     cursor2 = mydb.cursor(dictionary=True)
     cursor2.execute("SELECT * FROM Pig_Table ORDER BY pigTableID DESC LIMIT 1")
     last_row = cursor2.fetchone()
     last_petCount = last_row['petCount']
-    cursor2.close() 
-
-    try:
-        for pig in pigs_list:
-            dust_levels_list = pig['dust_levels']
-            # print(dust_levels_list)
-            if dust_levels_list.__len__() > 0:
-                plt.plot(np.arange(1, len(dust_levels_list) + 1),
-                         dust_levels_list)
-                plt.xlabel('Reading')
-                plt.ylabel('Dust Levels')
-                plt.title('Dust Level Readings')
-                plt.grid(True)
-
-                # Highlight min, max, and average values
-                min_value = min(dust_levels_list)
-                max_value = max(dust_levels_list)
-                avg_value = sum(dust_levels_list) / len(dust_levels_list)
-
-                plt.scatter(dust_levels_list.index(min_value) + 1, min_value, color='r', label='Min')
-                plt.scatter(dust_levels_list.index(max_value) + 1, max_value, color='g', label='Max')
-
-                plt.text(dust_levels_list.index(min_value) + 1, min_value,
-                            f'Min: {min_value}', verticalalignment='bottom', horizontalalignment='right', color='r')
-                plt.text(dust_levels_list.index(max_value) + 1, max_value,
-                            f'Max: {max_value}', verticalalignment='bottom', horizontalalignment='right', color='g')
-                
-                plt.axhline(y=avg_value, color='orange', linestyle='--', label=f'Average: {avg_value}')
-                plt.text(len(dust_levels_list), avg_value, f'Avg: {avg_value}', color='orange', verticalalignment='bottom', horizontalalignment='right')
-
-                chart_filename = f"static/pigRoom/chart/chart_{pig['pigTableID']}.png"
-                plt.savefig(chart_filename)
-                plt.close()
-    except Exception as e:
-        print("Error:", e)
+    cursor2.close()
 
     return render_template('pig-room.html', data=pigs_list, last_petCount=last_petCount)
 
-camera = Picamera2()
-camera.configure(camera.create_preview_configuration(main={"format": 'XRGB8888', "size": (640, 480)}))
-camera.start()
+def generate_frames():
+    while True:
+        frame = camera.capture_array()
+        ret, buffer = cv2.imencode('.jpg', frame)
+        frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+   
+@app.route('/camera_dog_feed')
+def camera_dog_feed():
+    try:
+        # Connect to MySQL database
+        cloudDB = mysql.connector.connect(
+            host="database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com",
+            user="smartpetcomfort",
+            password="swinburneaaronsarawakidauniversityjacklin",
+            database="petcomfort_db"
+        )
+        cloudCursor = cloudDB.cursor(dictionary=True)
 
-# Function to capture an image
-def capture_image(roomName):
-    frame = camera.capture_array()
-    filename = f'static/{roomName}/picam/picam.png'
-    cv2.imwrite(filename, frame)
-    return filename
+        # Retrieve the image and takePhoto_dog value from row with piCamID = 1
+        cloudCursor.execute("SELECT image, takePhoto_dog FROM Picam_Table WHERE piCamID = 1")
+        result = cloudCursor.fetchone()
 
-@app.route('/capture-pig-image', methods=['GET'])
-def capture_image_route():
-    room_name = 'PigRoom'
-    filename = capture_image(room_name)
-    return {"image_path": filename}
+        if result:
+            image_data = result['image']
+            takePhoto = result['takePhoto_dog']
 
-@app.route('/capture-cat-image', methods=['GET'])
-def capture_image_route():
-    room_name = 'CatRoom'
-    filename = capture_image(room_name)
-    return {"image_path": filename}
+            # Set takePhoto_dog to TRUE if it's not already TRUE
+            if not takePhoto:
+                cloudCursor.execute("UPDATE Picam_Table SET takePhoto_dog = TRUE WHERE piCamID = 1")
+                cloudDB.commit()
+
+            if image_data:
+                # Return the image
+                return send_file(io.BytesIO(image_data), mimetype='image/jpeg')
+            else:
+                print("There is no image to return.")
+                return jsonify({"message": "There is no image to return."}), 404
+        else:
+            print("No data found for piCamID = 1.")
+            return jsonify({"message": "No data found for piCamID = 1."}), 404
+
+    except Exception as e:
+        print("An error occurred:", e)
+        return jsonify({"message": "An error occurred."}), 500
+
+    finally:
+        if cloudDB.is_connected():
+            cloudCursor.close()
+            cloudDB.close()
+
+@app.route('/camera_cat_feed')
+def camera_cat_feed():
+    try:
+        # Connect to MySQL database
+        cloudDB = mysql.connector.connect(
+            host="database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com",
+            user="smartpetcomfort",
+            password="swinburneaaronsarawakidauniversityjacklin",
+            database="petcomfort_db"
+        )
+        cloudCursor = cloudDB.cursor(dictionary=True)
+
+        # Retrieve the image and takePhoto_cat value from row with piCamID = 1
+        cloudCursor.execute("SELECT image, takePhoto_cat FROM Picam_Table WHERE piCamID = 1")
+        result = cloudCursor.fetchone()
+
+        if result:
+            image_data = result['image']
+            takePhoto = result['takePhoto_cat']
+
+            # Set takePhoto_cat to TRUE if it's not already TRUE
+            if not takePhoto:
+                cloudCursor.execute("UPDATE Picam_Table SET takePhoto_cat = TRUE WHERE piCamID = 1")
+                cloudDB.commit()
+
+            if image_data:
+                # Return the image
+                return send_file(io.BytesIO(image_data), mimetype='image/jpeg')
+            else:
+                print("There is no image to return.")
+                return jsonify({"message": "There is no image to return."}), 404
+        else:
+            print("No data found for piCamID = 1.")
+            return jsonify({"message": "No data found for piCamID = 1."}), 404
+
+    except Exception as e:
+        print("An error occurred:", e)
+        return jsonify({"message": "An error occurred."}), 500
+
+    finally:
+        if cloudDB.is_connected():
+            cloudCursor.close()
+            cloudDB.close()
+
+@app.route('/camera_pig_feed')
+def camera_pig_feed():
+    try:
+        # Connect to MySQL database
+        cloudDB = mysql.connector.connect(
+            host="database-1.cjjqkkvq5tm1.us-east-1.rds.amazonaws.com",
+            user="smartpetcomfort",
+            password="swinburneaaronsarawakidauniversityjacklin",
+            database="petcomfort_db"
+        )
+        cloudCursor = cloudDB.cursor(dictionary=True)
+
+        # Retrieve the image and takePhoto_pig value from row with piCamID = 1
+        cloudCursor.execute("SELECT image, takePhoto_pig FROM Picam_Table WHERE piCamID = 1")
+        result = cloudCursor.fetchone()
+
+        if result:
+            image_data = result['image']
+            takePhoto = result['takePhoto_pig']
+
+            # Set takePhoto_pig to TRUE if it's not already TRUE
+            if not takePhoto:
+                cloudCursor.execute("UPDATE Picam_Table SET takePhoto_pig = TRUE WHERE piCamID = 1")
+                cloudDB.commit()
+
+            if image_data:
+                # Return the image
+                return send_file(io.BytesIO(image_data), mimetype='image/jpeg')
+            else:
+                print("There is no image to return.")
+                return jsonify({"message": "There is no image to return."}), 404
+        else:
+            print("No data found for piCamID = 1.")
+            return jsonify({"message": "No data found for piCamID = 1."}), 404
+
+    except Exception as e:
+        print("An error occurred:", e)
+        return jsonify({"message": "An error occurred."}), 500
+
+    finally:
+        if cloudDB.is_connected():
+            cloudCursor.close()
+            cloudDB.close()
 
 if __name__ == '__main__':
-    app.run()
+    # Start the Flask application
+    app.run(debug=True)
